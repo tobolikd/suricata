@@ -30,8 +30,6 @@
 #include <rte_ethdev.h>
 #endif
 
-typedef enum { DPDK_COPY_MODE_NONE, DPDK_COPY_MODE_TAP, DPDK_COPY_MODE_IPS } DpdkCopyModeEnum;
-
 #define DPDK_BURST_TX_WAIT_US 1
 
 /* DPDK Flags */
@@ -42,39 +40,6 @@ typedef enum { DPDK_COPY_MODE_NONE, DPDK_COPY_MODE_TAP, DPDK_COPY_MODE_IPS } Dpd
 #define DPDK_RX_CHECKSUM_OFFLOAD (1 << 4) /**< Enable chsum offload */
 
 void DPDKSetTimevalOfMachineStart(void);
-typedef struct DPDKIfaceConfig_ {
-#ifdef HAVE_DPDK
-    char iface[RTE_ETH_NAME_MAX_LEN];
-    uint16_t port_id;
-    int32_t socket_id;
-    /* number of threads - zero means all available */
-    int threads;
-    /* IPS mode */
-    DpdkCopyModeEnum copy_mode;
-    const char *out_iface;
-    uint16_t out_port_id;
-    /* DPDK flags */
-    uint32_t flags;
-    ChecksumValidationMode checksum_mode;
-    uint64_t rss_hf;
-    /* set maximum transmission unit of the device in bytes */
-    uint16_t mtu;
-    uint16_t nb_rx_queues;
-    uint16_t nb_rx_desc;
-    uint16_t nb_tx_queues;
-    uint16_t nb_tx_desc;
-    uint32_t mempool_size;
-    uint32_t mempool_cache_size;
-    struct rte_mempool *pkt_mempool;
-    SC_ATOMIC_DECLARE(unsigned int, ref);
-    /* threads bind queue id one by one */
-    SC_ATOMIC_DECLARE(uint16_t, queue_id);
-    SC_ATOMIC_DECLARE(uint16_t, inconsitent_numa_cnt);
-    void (*DerefFunc)(void *);
-
-    struct rte_flow *flow[100];
-#endif
-} DPDKIfaceConfig;
 
 /**
  * \brief per packet DPDK vars
@@ -86,9 +51,14 @@ typedef struct DPDKPacketVars_ {
     uint16_t out_port_id;
     uint16_t out_queue_id;
     uint8_t copy_mode;
+    struct rte_ring *tx_ring; // pkt is sent to this ring (same as out_port_*)
 } DPDKPacketVars;
+
+void DevicePostStartPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_name);
+void DevicePreStopPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_name);
 
 void TmModuleReceiveDPDKRegister(void);
 void TmModuleDecodeDPDKRegister(void);
+void DPDKSetTimevalOfMachineStart(void);
 
 #endif /* __SOURCE_DPDK_H__ */
