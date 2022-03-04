@@ -28,18 +28,26 @@
 
 #include <rte_eal.h>
 #include <rte_ethdev.h>
+#include <rte_ip.h>
 #include <rte_launch.h>
 #include <rte_lcore.h>
 #include <rte_log.h>
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
+#include <rte_malloc.h>
 #include <rte_flow.h>
+#include <rte_hash.h>
+#include <rte_tcp.h>
+
+#include "suricata.h"
+#include "util-device.h"
+
+#define RSS_HKEY_LEN 40
 
 #endif /* HAVE_DPDK */
 
-#include "util-device.h"
-
-uint8_t CountDigits(uint16_t n);
+uint32_t ArrayMaxValue(const uint32_t *arr, uint16_t arr_len);
+uint8_t CountDigits(uint32_t n);
 void DPDKCleanupEAL(void);
 void DPDKCloseDevice(LiveDevice *ldev);
 
