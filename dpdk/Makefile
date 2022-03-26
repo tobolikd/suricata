@@ -1,0 +1,11 @@
+TOPTARGETS := all clean
+SUBDIRS = prefilter
+
+$(TOPTARGETS): $(SUBDIRS)
+$(SUBDIRS):
+	$(MAKE) -C $@ $(MAKECMDGOALS)
+
+install:
+
+
+.PHONY: $(TOPTARGETS) $(SUBDIRS)

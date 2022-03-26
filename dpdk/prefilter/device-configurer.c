@@ -16,18 +16,10 @@
 */
 
 /**
- * \file
- *
- * \author Lukas Sismis <sismis@cesnet.com>
- *
- */
+* \file
+*
+* \author Lukas Sismis <lukas.sismis@cesnet.cz>
+*/
 
-#ifndef SURICATA_PREFILTER_H
-#define SURICATA_PREFILTER_H
+#include "device-configurer.h"
 
-#define _POSIX_C_SOUCRE 200809L
-
-
-#include <rte_eal.h>
-
-#endif // SURICATA_PREFILTER_H

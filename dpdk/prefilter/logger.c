@@ -13,7 +13,7 @@
 * version 2 along with this program; if not, write to the Free Software
 * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 * 02110-1301, USA.
-*/
+ */
 
 /**
  * \file
@@ -22,12 +22,15 @@
  *
  */
 
-#ifndef SURICATA_PREFILTER_H
-#define SURICATA_PREFILTER_H
+#include "logger.h"
 
-#define _POSIX_C_SOUCRE 200809L
+LogLevelEnum LogLevel;
+struct logger_ops logger;
 
+void LoggerInitOps(struct logger_ops ops) {
+    logger = ops;
+}
 
-#include <rte_eal.h>
-
-#endif // SURICATA_PREFILTER_H
+struct logger_ops Log() {
+    return logger;
+}

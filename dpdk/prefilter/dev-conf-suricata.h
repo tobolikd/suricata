@@ -13,21 +13,17 @@
 * version 2 along with this program; if not, write to the Free Software
 * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 * 02110-1301, USA.
-*/
-
-/**
- * \file
- *
- * \author Lukas Sismis <sismis@cesnet.com>
- *
  */
 
-#ifndef SURICATA_PREFILTER_H
-#define SURICATA_PREFILTER_H
+/**
+* \file
+*
+* \author Lukas Sismis <lukas.sismis@cesnet.cz>
+ */
 
-#define _POSIX_C_SOUCRE 200809L
+#ifndef DEV_CONF_SURICATA_H
+#define DEV_CONF_SURICATA_H
 
+extern struct DeviceConfigurer dev_conf_suricata_ops;
 
-#include <rte_eal.h>
-
-#endif // SURICATA_PREFILTER_H
+#endif // DEV_CONF_SURICATA_H

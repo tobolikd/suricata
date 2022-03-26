@@ -1376,6 +1376,11 @@
             DPDK_RPATH="-Wl,-R,`${dpdk_libs_cut}`"
         fi
         LIBS="${LIBS} ${DPDK_RPATH} `pkg-config --libs libdpdk`"
+        DPDK_PKG_CONFIG_VAR="$(pkg-config --exists libdpdk && echo 0)"
+        DPDK_LDFLAGS="$(echo "$LDFLAGS_STATIC" | grep 'whole-archive.*l:lib.*no-whole-archive')"
+        AM_CONDITIONAL([DPDK_PKG_CONFIG], [test "x$DPDK_PKG_CONFIG_VAR" = x0])
+        AM_CONDITIONAL([DPDK_MAKECMDGOALS], [test "x$MAKECMDGOALS" = "xstatic"])
+        AM_CONDITIONAL([DPDK_LDFLAGS_STATIC], [test "x$DPDK_LDFLAGS" = "x"])
     ])
 
   # Netmap support
@@ -2534,6 +2539,7 @@ AC_CONFIG_FILES(suricata.yaml etc/Makefile etc/suricata.logrotate etc/suricata.s
 AC_CONFIG_FILES(python/Makefile python/suricata/config/defaults.py)
 AC_CONFIG_FILES(ebpf/Makefile)
 AC_CONFIG_FILES(libsuricata-config)
+AC_CONFIG_FILES(dpdk/prefilter/Makefile)
 AC_OUTPUT
 
 SURICATA_BUILD_CONF="Suricata Configuration:

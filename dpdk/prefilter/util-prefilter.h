@@ -13,7 +13,7 @@
 * version 2 along with this program; if not, write to the Free Software
 * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 * 02110-1301, USA.
-*/
+ */
 
 /**
  * \file
@@ -22,12 +22,10 @@
  *
  */
 
-#ifndef SURICATA_PREFILTER_H
-#define SURICATA_PREFILTER_H
+#ifndef SURICATA_UTIL_PREFILTER_H
+#define SURICATA_UTIL_PREFILTER_H
 
-#define _POSIX_C_SOUCRE 200809L
+int ShouldStop(void);
+void SignalInit(void);
 
-
-#include <rte_eal.h>
-
-#endif // SURICATA_PREFILTER_H
+#endif // SURICATA_UTIL_PREFILTER_H
