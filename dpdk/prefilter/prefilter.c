@@ -126,6 +126,8 @@ int main(int argc, char *argv[])
         return -ret;
     }
 
+    Log().notice("it is configured I guess???");
+
 
 
     //    ConfigurerInit();

@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <errno.h>
+#include <string.h>
 
 #include "logger.h"
 #include "dev-conf.h"
@@ -36,15 +37,15 @@ void RingListInitHead(void)
     TAILQ_INIT(&tailq_ring_head);
 }
 
-int RingListAddConf(void *ring_conf)
+int RingListAddConf(const struct ring_list_entry *re)
 {
-    struct ring_entry *ring_entry = calloc(sizeof(struct ring_entry), 1);
+    struct ring_list_entry *ring_entry = calloc(sizeof(struct ring_list_entry), 1);
     if (ring_entry == NULL) {
         Log().error(ENOMEM, "No memory for ring entry\n");
         return -ENOMEM;
     }
+    memcpy(ring_entry, re, sizeof(struct ring_list_entry));
 
-    ring_entry->ring_conf = ring_conf;
     TAILQ_INSERT_TAIL(&tailq_ring_head, ring_entry, entries);
     return 0;
 }
@@ -55,6 +56,7 @@ void DevConfInit(struct DeviceConfigurer ops)
     devconf = ops;
 }
 
+// after call to this function, it is assumed that RingList is populated
 int DevConfConfigureBy(void *conf)
 {
     return devconf.ConfigureBy(conf);

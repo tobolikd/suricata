@@ -26,13 +26,23 @@
 
 #include <sys/queue.h>
 
-struct ring_entry {
-    void *ring_conf;
-    TAILQ_ENTRY(ring_entry) entries;
-    TAILQ_HEAD(, ring_entry) head;
+typedef int (*start_ring)(void *ring_conf);
+typedef int (*fill_ring)(void *ring_conf);
+typedef int (*stop_ring)(void *ring_conf);
+
+struct ring_list_entry {
+    // here I would like to have config separately for RX rings, bypass table, task ring...
+    // or at least already created instances of things / API functions
+    // e.g. (rte_ring *, bypass_table_lookup(), bypass_table...)
+    void *pre_ring_conf; // here should be stored either raw config or everything not covered before
+    start_ring start;
+//    fill_ring fill;
+    stop_ring stop;
+    TAILQ_ENTRY(ring_list_entry) entries;
+    TAILQ_HEAD(, ring_list_entry) head;
 };
 
-typedef TAILQ_HEAD(ring_tailq_head, ring_entry) ring_tailq_t;
+typedef TAILQ_HEAD(ring_tailq_head, ring_list_entry) ring_tailq_t;
 extern ring_tailq_t tailq_ring_head;
 
 typedef int (*configure_by)(void *conf);
@@ -45,6 +55,6 @@ void DevConfInit(struct DeviceConfigurer ops);
 int DevConfConfigureBy(void *conf);
 
 void RingListInitHead(void);
-int RingListAddConf(void *ring_conf);
+int RingListAddConf(const struct ring_list_entry *re);
 
 #endif // DEV_CONF_H
