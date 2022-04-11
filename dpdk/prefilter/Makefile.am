@@ -8,7 +8,11 @@ SRCS = \
     logger.c \
     logger-basic.c \
     dev-conf.c \
-    dev-conf-suricata.c
+    dev-conf-suricata.c \
+    lcores-manager.c \
+    lcore-worker.c \
+    lcore-worker-suricata.c \
+    stats.c
 
 # Build using pkg-config variables if possible
 if !DPDK_PKG_CONFIG

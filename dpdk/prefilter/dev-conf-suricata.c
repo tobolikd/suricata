@@ -43,66 +43,6 @@
 #include "runmode-dpdk.h"
 #include "source-dpdk.h"
 
-enum PFOpMode {
-    PIPELINE,
-    IDS,
-    IPS,
-};
-
-struct ring_conf {
-    const char *name_base;
-    uint32_t elem_cnt;
-};
-
-struct nic_conf {
-    const char *port1_pcie;
-    const char *port2_pcie;
-    uint16_t port1_id;
-    uint16_t port2_id;
-    uint16_t socket_id;
-    /* Ring mode settings */
-    struct rte_ring **rx_rings;
-    struct rte_ring **tx_rings;
-    /* End of ring mode settings */
-    /* DPDK flags */
-    uint32_t flags;
-    /* set maximum transmission unit of the device in bytes */
-    uint16_t mtu;
-    uint16_t nb_rx_desc;
-    uint16_t nb_tx_desc;
-    uint32_t mempool_size;
-    uint32_t mempool_cache_size;
-    struct rte_mempool *pkt_mempool;
-};
-
-struct table_conf {
-    const char *name;
-    uint32_t entries;
-};
-
-struct mempool_conf {
-    const char *name;
-    uint32_t entries;
-    uint16_t cache_entries;
-};
-
-struct msgs_conf {
-    struct ring_conf task_ring;
-    struct ring_conf result_ring;
-    struct mempool_conf mempool;
-};
-
-struct ring_conf_suricata {
-    struct ring_conf main_ring;
-    enum PFOpMode opmode;
-    uint16_t sec_app_cores_cnt;
-    uint16_t pf_cores_cnt;
-    struct nic_conf nic_conf;
-    struct msgs_conf msgs;
-    struct table_conf bypass_table_base;
-    struct mempool_conf bypass_mempool;
-};
-
 struct RingConfigAttributes {
     const char *ring_name_base;
     const char *ring_elems;
@@ -313,21 +253,22 @@ static int ConfGetDescendantValueBool(const ConfNode *base, const char *name, in
     return 1;
 }
 
-int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata *rc)
+int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re, const char *rname)
 {
+    struct ring_list_entry_suricata *rc = (struct ring_list_entry_suricata *)re->pre_ring_conf;
     const char *entry_str = NULL;
     intmax_t entry_int;
     int retval, entry_bool;
     const char *entry_char;
 
-    rc->main_ring.name_base = rnode->val;
+    re->main_ring.name_base = rname;
 
     retval = ConfGetChildValueInt(rnode, pf_yaml.main_ring.ring_elems, &entry_int);
     if (retval != 1 || entry_int <= 0) {
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.main_ring.ring_elems);
         return -EXIT_FAILURE;
     } else {
-        rc->main_ring.elem_cnt = entry_int;
+        re->main_ring.elem_cnt = entry_int;
     }
 
     retval = ConfGetChildValueInt(rnode, pf_yaml.prefilter_lcores, &entry_int);
@@ -335,7 +276,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.prefilter_lcores);
         return -EXIT_FAILURE;
     } else {
-        rc->pf_cores_cnt = entry_int;
+        re->pf_cores_cnt = entry_int;
     }
 
     retval = ConfGetChildValueInt(rnode, pf_yaml.secondary_app_lcores, &entry_int);
@@ -343,7 +284,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.secondary_app_lcores);
         return -EXIT_FAILURE;
     } else {
-        rc->sec_app_cores_cnt = entry_int;
+        re->sec_app_cores_cnt = entry_int;
     }
 
     retval = ConfGetChildValue(rnode, pf_yaml.op_mode, &entry_char);
@@ -352,11 +293,11 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         return -EXIT_FAILURE;
     } else {
         if (strcmp(entry_char, PREFILTER_CONFIG_OPERATION_MODE_PIPELINE) == 0)
-            rc->opmode = PIPELINE;
+            re->opmode = PIPELINE;
         else if (strcmp(entry_char, PREFILTER_CONFIG_OPERATION_MODE_IDS) == 0)
-            rc->opmode = IDS;
+            re->opmode = IDS;
         else if (strcmp(entry_char, PREFILTER_CONFIG_OPERATION_MODE_IPS) == 0)
-            rc->opmode = IPS;
+            re->opmode = IPS;
         else {
             Log().error(ENOENT, "Unable to read value of %s", pf_yaml.op_mode);
             return -EXIT_FAILURE;
@@ -368,7 +309,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.bypass_table_name);
         return -EXIT_FAILURE;
     } else {
-        rc->bypass_table_base.name = entry_char;
+        re->bypass_table_base.name = entry_char;
     }
 
     retval = ConfGetDescendantValueInt(rnode, pf_yaml.bypass_table_entries, &entry_int);
@@ -376,7 +317,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.bypass_table_entries);
         return -EXIT_FAILURE;
     } else {
-        rc->bypass_table_base.entries = entry_int;
+        re->bypass_table_base.entries = entry_int;
     }
 
     retval = ConfGetDescendantValue(rnode, pf_yaml.bypass_mp_name, &entry_char);
@@ -385,9 +326,9 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         return -EXIT_FAILURE;
     } else {
         if (entry_char == NULL || entry_char[0] == '\0' || strcmp(entry_char, "none") == 0)
-            rc->bypass_mempool.name = NULL;
+            re->bypass_mempool.name = NULL;
         else
-            rc->bypass_mempool.name = entry_char;
+            re->bypass_mempool.name = entry_char;
     }
 
     retval = ConfGetDescendantValueInt(rnode, pf_yaml.bypass_mp_entries, &entry_int);
@@ -395,7 +336,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.bypass_mp_entries);
         return -EXIT_FAILURE;
     } else {
-        rc->bypass_mempool.entries = entry_int;
+        re->bypass_mempool.entries = entry_int;
     }
 
     retval = ConfGetDescendantValueInt(rnode, pf_yaml.bypass_mp_cache_entries, &entry_int);
@@ -403,7 +344,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.bypass_mp_cache_entries);
         return -EXIT_FAILURE;
     } else {
-        rc->bypass_mempool.cache_entries = entry_int;
+        re->bypass_mempool.cache_entries = entry_int;
     }
 
     retval = ConfGetDescendantValue(rnode, pf_yaml.task_ring.ring_name_base, &entry_char);
@@ -411,7 +352,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.task_ring.ring_name_base);
         return -EXIT_FAILURE;
     } else {
-        rc->msgs.task_ring.name_base = entry_char;
+        re->msgs.task_ring.name_base = entry_char;
     }
 
     retval = ConfGetDescendantValueInt(rnode, pf_yaml.task_ring.ring_elems, &entry_int);
@@ -419,7 +360,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.task_ring.ring_elems);
         return -EXIT_FAILURE;
     } else {
-        rc->msgs.task_ring.elem_cnt = entry_int;
+        re->msgs.task_ring.elem_cnt = entry_int;
     }
 
     retval = ConfGetDescendantValue(rnode, pf_yaml.nic_config.port_pcie1, &entry_char);
@@ -513,7 +454,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.results_ring.ring_name_base);
         return -EXIT_FAILURE;
     } else {
-        rc->msgs.result_ring.name_base = entry_char;
+        re->msgs.result_ring.name_base = entry_char;
     }
 
     retval = ConfGetDescendantValueInt(
@@ -522,7 +463,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.results_ring.ring_elems);
         return -EXIT_FAILURE;
     } else {
-        rc->msgs.result_ring.elem_cnt = entry_int;
+        re->msgs.result_ring.elem_cnt = entry_int;
     }
 
     retval = ConfGetDescendantValue(ConfGetRootNode(), pf_yaml.msgs_mp.mp_name_base, &entry_char);
@@ -530,7 +471,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.msgs_mp.mp_name_base);
         return -EXIT_FAILURE;
     } else {
-        rc->msgs.mempool.name = entry_char;
+        re->msgs.mempool.name = entry_char;
     }
 
     retval = ConfGetDescendantValueInt(ConfGetRootNode(), pf_yaml.msgs_mp.mp_entries, &entry_int);
@@ -538,7 +479,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.msgs_mp.mp_entries);
         return -EXIT_FAILURE;
     } else {
-        rc->msgs.mempool.entries = entry_int;
+        re->msgs.mempool.entries = entry_int;
     }
 
     retval = ConfGetDescendantValueInt(
@@ -547,48 +488,51 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_conf_suricata 
         Log().error(ENOENT, "Unable to read value of %s", pf_yaml.msgs_mp.mp_cache_entries);
         return -EXIT_FAILURE;
     } else {
-        rc->msgs.mempool.cache_entries = entry_int;
+        re->msgs.mempool.cache_entries = entry_int;
     }
 
     return 0;
 }
 
 static DPDKIfaceConfig ConfPrefitlerToSuricataAdapter(
-        struct ring_conf_suricata *re, bool first_port)
+        struct ring_list_entry *re, bool first_port)
 {
+    struct ring_list_entry_suricata *re_suri = (struct ring_list_entry_suricata *)re->pre_ring_conf;
     DPDKIfaceConfig suri_conf = { 0 };
     if (first_port)
-        strlcpy(suri_conf.iface, re->nic_conf.port1_pcie, sizeof(suri_conf.iface));
+        strlcpy(suri_conf.iface, re_suri->nic_conf.port1_pcie, sizeof(suri_conf.iface));
     else
-        strlcpy(suri_conf.iface, re->nic_conf.port2_pcie, sizeof(suri_conf.iface));
+        strlcpy(suri_conf.iface, re_suri->nic_conf.port2_pcie, sizeof(suri_conf.iface));
 
     suri_conf.nb_rx_queues = re->pf_cores_cnt;
     suri_conf.nb_tx_queues = re->pf_cores_cnt;
-    suri_conf.mtu = re->nic_conf.mtu;
+    suri_conf.mtu = re_suri->nic_conf.mtu;
     suri_conf.checksum_mode = CHECKSUM_VALIDATION_ENABLE;
-    suri_conf.flags = re->nic_conf.flags;
-    suri_conf.nb_rx_desc = re->nic_conf.nb_rx_desc;
-    suri_conf.nb_tx_desc = re->nic_conf.nb_tx_desc;
-    suri_conf.mempool_size = re->nic_conf.mempool_size;
-    suri_conf.mempool_cache_size = re->nic_conf.mempool_cache_size;
+    suri_conf.flags = re_suri->nic_conf.flags;
+    suri_conf.nb_rx_desc = re_suri->nic_conf.nb_rx_desc;
+    suri_conf.nb_tx_desc = re_suri->nic_conf.nb_tx_desc;
+    suri_conf.mempool_size = re_suri->nic_conf.mempool_size;
+    suri_conf.mempool_cache_size = re_suri->nic_conf.mempool_cache_size;
     return suri_conf;
 }
 
 static void ConfSuricataToPrefitlerAdapter(
-        struct ring_conf_suricata *re, DPDKIfaceConfig *post_suri_conf, bool first_port)
+        struct ring_list_entry *re, DPDKIfaceConfig *post_suri_conf, bool first_port)
 {
+    struct ring_list_entry_suricata *re_suri = (struct ring_list_entry_suricata *)re->pre_ring_conf;
     DPDKIfaceConfig suri_conf = { 0 };
     if (first_port)
-        re->nic_conf.port1_id = post_suri_conf->port_id;
+        re_suri->nic_conf.port1_id = post_suri_conf->port_id;
     else
-        re->nic_conf.port2_id = post_suri_conf->port_id;
+        re_suri->nic_conf.port2_id = post_suri_conf->port_id;
 
-    re->nic_conf.socket_id = post_suri_conf->port_id;
-    re->nic_conf.pkt_mempool = post_suri_conf->pkt_mempool;
+    re_suri->nic_conf.socket_id = post_suri_conf->port_id;
+    re_suri->nic_conf.pkt_mempool = post_suri_conf->pkt_mempool;
 }
 
-static int DevConfSuricataConfigureDevices(struct ring_conf_suricata *rconf)
+static int DevConfSuricataConfigureDevices(struct ring_list_entry *rconf)
 {
+    struct ring_list_entry_suricata *devconf = (struct ring_list_entry_suricata *)rconf->pre_ring_conf;
     int retval;
     DPDKIfaceConfig suri_conf;
 
@@ -616,32 +560,33 @@ static int DevConfSuricataConfigureDevices(struct ring_conf_suricata *rconf)
 int DevConfSuricataStartRing(void *ring_conf)
 {
     int retval;
-    struct ring_conf_suricata *rc = (struct ring_conf_suricata *)ring_conf;
+    struct ring_list_entry *re = (struct ring_list_entry *)ring_conf;
+    struct ring_list_entry_suricata *re_suri = (struct ring_list_entry_suricata *)ring_conf;
 
-    retval = rte_eth_dev_start(rc->nic_conf.port1_id);
+    retval = rte_eth_dev_start(re_suri->nic_conf.port1_id);
     if (retval < 0) {
         Log().error(EINVAL, "Error (%s) during device startup of %s", rte_strerror(-retval),
-                rc->nic_conf.port1_pcie);
+                re_suri->nic_conf.port1_pcie);
         return retval;
     }
 
     struct rte_eth_dev_info dev_info;
-    retval = rte_eth_dev_info_get(rc->nic_conf.port1_id, &dev_info);
+    retval = rte_eth_dev_info_get(re_suri->nic_conf.port1_id, &dev_info);
     if (retval != 0) {
         Log().error(EINVAL, "Error (%s) when getting device info of %s", rte_strerror(-retval),
-                rc->nic_conf.port1_pcie);
+                re_suri->nic_conf.port1_pcie);
         return retval;
     }
 
     // some PMDs requires additional actions only after the device has started
     DevicePostStartPMDSpecificActions(
-            rc->nic_conf.port1_id, rc->pf_cores_cnt, dev_info.driver_name);
+            re_suri->nic_conf.port1_id, re->pf_cores_cnt, dev_info.driver_name);
 }
 
 int DevConfSuricataStopRing(void *ring_conf)
 {
     int retval;
-    struct ring_conf_suricata *rc = (struct ring_conf_suricata *)ring_conf;
+    struct ring_list_entry_suricata *rc = (struct ring_list_entry_suricata *)ring_conf;
     struct rte_eth_dev_info dev_info;
 
     retval = rte_eth_dev_info_get(rc->nic_conf.port1_id, &dev_info);
@@ -692,27 +637,29 @@ int DevConfSuricataConfigureBy(void *conf)
             SCLogNotice("Unable to find configuration for %s \"%s\"", itemname, live_dev_c);
         }
 
-        struct ring_conf_suricata *rc =
-                rte_calloc("struct ring_conf_suricata", 1, sizeof(struct ring_conf_suricata), 0);
+        struct ring_list_entry_suricata *rc =
+                rte_calloc("struct ring_list_entry_suricata", 1, sizeof(struct ring_list_entry_suricata), 0);
         if (rc == NULL)
             Log().error(ENOMEM, "Calloc for Suricata configuration structure failed");
-
-        retval = DevConfSuricataLoadRingEntryConf(ring_node, rc);
-        if (retval != 0) {
-            return retval;
-        }
-
-        retval = DevConfSuricataConfigureDevices(rc);
-        if (retval != 0)
-            return retval;
 
         struct ring_list_entry re = {
             .pre_ring_conf = rc,
             .start = DevConfSuricataStartRing,
             .stop = DevConfSuricataStopRing,
         };
+
+        retval = DevConfSuricataLoadRingEntryConf(ring_node, &re, live_dev_c);
+        if (retval != 0) {
+            return retval;
+        }
+
+        retval = DevConfSuricataConfigureDevices(&re);
+        if (retval != 0)
+            return retval;
+
         RingListAddConf(&re);
     }
+    return 0;
 }
 
 struct DeviceConfigurer dev_conf_suricata_ops = { .ConfigureBy = DevConfSuricataConfigureBy };

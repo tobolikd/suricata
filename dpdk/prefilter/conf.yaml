@@ -12,9 +12,9 @@ message-mempool:
 
 
 rings:
-  - ring: "sda"
+  - ring: "myring"
     elements: 4096
-    op-mode: ids # ips / pipeline
+    op-mode: ips # ids / ips / pipeline
     secondary-app-lcores: 4
     pf-lcores: 2
     bypass-table:
@@ -30,8 +30,8 @@ rings:
       name: "task_ring"
       elements: 1024
     nic-config:
-      port-pcie1: 0000:3b:00.0
-      port-pcie2: 0000:3b:00.1
+      port-pcie1: 0000:3b:00.1
+      port-pcie2: 0000:3b:00.0
       promisc: true # promiscuous mode - capture all packets
       multicast: true # enables also detection on multicast packets
       rss: true

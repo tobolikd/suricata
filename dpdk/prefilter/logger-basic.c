@@ -47,7 +47,7 @@ void LoggerBasicDebug(char *format, ...) {
     va_start(ap,format);
     vfprintf(stdout,format,ap);
     va_end(ap);
-    fprintf(stderr,"\n");
+    fprintf(stdout,"\n");
 }
 
 void LoggerBasicInfo(char *format, ...) {
@@ -59,7 +59,7 @@ void LoggerBasicInfo(char *format, ...) {
     va_start(ap,format);
     vfprintf(stdout,format,ap);
     va_end(ap);
-    fprintf(stderr,"\n");
+    fprintf(stdout,"\n");
 }
 
 void LoggerBasicNotice(char *format, ...) {
@@ -71,7 +71,7 @@ void LoggerBasicNotice(char *format, ...) {
     va_start(ap,format);
     vfprintf(stdout,format,ap);
     va_end(ap);
-    fprintf(stderr,"\n");
+    fprintf(stdout,"\n");
 }
 
 void LoggerBasicWarning(int code, char *format, ...) {

@@ -18,30 +18,17 @@
 /**
  * \file
  *
- * \author Lukas Sismis <sismis@cesnet.com>
- *
+ * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
-#ifndef SURICATA_PREFILTER_H
-#define SURICATA_PREFILTER_H
-
-#define _POSIX_C_SOUCRE 200809L
-
-#include <rte_eal.h>
+#ifndef LCORE_WORKER_SURICATA_H
+#define LCORE_WORKER_SURICATA_H
 
 #include "dev-conf.h"
+#include "lcore-worker.h"
+#include "lcores-manager.h"
 
-struct resource_ring {
-    uint16_t ring_from_pf_arr_len;
-    struct rte_ring **ring_from_pf_arr;
-    uint16_t ring_to_pf_arr_len;
-    struct rte_ring **ring_to_pf_arr;
-    struct ring_conf *ring_conf;
-};
+struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals);
+void ThreadSuricataRun(struct lcore_values *lv);
 
-struct resource_ctx {
-    uint16_t main_rings_cnt;
-    struct resource_ring *main_rings;
-};
-
-#endif // SURICATA_PREFILTER_H
+#endif // LCORE_WORKER_SURICATA_H

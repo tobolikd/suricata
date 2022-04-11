@@ -24,6 +24,38 @@
 #ifndef DEV_CONF_SURICATA_H
 #define DEV_CONF_SURICATA_H
 
+#include <stdint-gcc.h>
+#include <sys/types.h>
+
+#include <rte_ring.h>
+#include <rte_mempool.h>
+
+
+struct nic_conf {
+    const char *port1_pcie;
+    const char *port2_pcie;
+    uint16_t port1_id;
+    uint16_t port2_id;
+    uint16_t socket_id;
+    /* Ring mode settings */
+    struct rte_ring **rx_rings;
+    struct rte_ring **tx_rings;
+    /* End of ring mode settings */
+    /* DPDK flags */
+    uint32_t flags;
+    /* set maximum transmission unit of the device in bytes */
+    uint16_t mtu;
+    uint16_t nb_rx_desc;
+    uint16_t nb_tx_desc;
+    uint32_t mempool_size;
+    uint32_t mempool_cache_size;
+    struct rte_mempool *pkt_mempool;
+};
+
+struct ring_list_entry_suricata {
+    struct nic_conf nic_conf;
+};
+
 extern struct DeviceConfigurer dev_conf_suricata_ops;
 
 #endif // DEV_CONF_SURICATA_H

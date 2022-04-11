@@ -33,6 +33,8 @@
 
 #include "dev-conf.h"
 #include "dev-conf-suricata.h"
+#include "lcores-manager.h"
+#include "stats.h"
 
 struct prefilter_args {
     char *conf_path;
@@ -106,7 +108,9 @@ struct option long_opts[] = {
 int main(int argc, char *argv[])
 {
     int ret;
+    struct resource_ctx ctx = {0};
     struct prefilter_args args;
+    struct pf_stats *stats;
     EalInit(&argc, &argv);
     ret = ArgsParse(argc, argv, &args);
     if (ret != 0)
@@ -116,17 +120,67 @@ int main(int argc, char *argv[])
 
     LoggerInitOps(logger_basic_ops);
 
-
-
-
 //    dev_conf_suricata_ops
     DevConfInit(dev_conf_suricata_ops);
     ret = DevConfConfigureBy((void *)args.conf_path);
     if (ret != 0) {
-        return -ret;
+        return ret;
     }
+    Log().info("Configured");
 
-    Log().notice("it is configured I guess???");
+    ret = DevConfRingsInit(&ctx);
+    if (ret != 0)
+        return ret;
+
+    ret = StatsInit(&stats);
+    if (ret != 0)
+        return ret;
+
+    ret = LcoreManagerRunWorkers(stats);
+    if (ret != 0)
+        return ret;
+
+    rte_eal_mp_wait_lcore();
+
+    StatsExitLog(stats);
+
+
+
+//    LcoreManagerRunWorkers()
+    // init lcore structure
+
+    // RingListSpawnWorkers()
+    // spawn workers
+
+    // RingListSpawnWorker()
+    // workers init (alloc resources on the main, so if any error happens, you can free them)
+    // on spawn of all workers release resource buffer
+    //
+    //
+    //worker
+    // create worker struct that includes
+    // ring entry, atomic threads state, atomic state_sync_cnt, assigned queue, assigned port number
+    // worker does not alloc resources mostly
+    // maybe only somehow initializes them
+    // Workers should be unified again I guess. (to avoid complications)
+    // then increase state_sync_cnt and wait based on the threads_state enum(?)
+    // this is Suricata state, check those out. PTV_KILL and similar.
+    // maybe each worker will have the thread state variable...
+
+    // On deinit...
+    // main thread sets thread_state to stop
+    // thread deinit starts (probably nothing, maybe stats export, cleaning up the tables but not freeing)
+    //
+    // Check thread sync from Suricata (e.g. TmThreadsCheckFlag, THV_KILL etc.)
+
+    // maybe main thread could hold all resources so those can be freed from one place...
+
+
+
+
+
+    //
+
 
 
 

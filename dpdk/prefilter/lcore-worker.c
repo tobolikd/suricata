@@ -18,30 +18,32 @@
 /**
  * \file
  *
- * \author Lukas Sismis <sismis@cesnet.com>
- *
+ * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
-#ifndef SURICATA_PREFILTER_H
-#define SURICATA_PREFILTER_H
-
-#define _POSIX_C_SOUCRE 200809L
-
-#include <rte_eal.h>
-
+#include "lcore-worker.h"
 #include "dev-conf.h"
+#include "lcores-manager.h"
+#include "lcore-worker-suricata.h"
 
-struct resource_ring {
-    uint16_t ring_from_pf_arr_len;
-    struct rte_ring **ring_from_pf_arr;
-    uint16_t ring_to_pf_arr_len;
-    struct rte_ring **ring_to_pf_arr;
-    struct ring_conf *ring_conf;
-};
+#include <rte_atomic.h>
 
-struct resource_ctx {
-    uint16_t main_rings_cnt;
-    struct resource_ring *main_rings;
-};
+int ThreadMain(void *init_values)
+{
+    struct lcore_values *lv;
 
-#endif // SURICATA_PREFILTER_H
+    lv = ThreadSuricataInit(init_values);
+    if (lv == NULL)
+        return -EINVAL;
+
+    ThreadSuricataRun(lv);
+
+    struct lcore_init *vals = (struct lcore_init *)init_values;
+
+    rte_atomic64_add(&vals->stats->pkts_rx, lv->stats.pkts_rx);
+    rte_atomic64_add(&vals->stats->pkts_tx, lv->stats.pkts_tx);
+    rte_atomic64_add(&vals->stats->pkts_enq, lv->stats.pkts_enq);
+    rte_atomic64_add(&vals->stats->pkts_deq, lv->stats.pkts_deq);
+
+    return 0;
+}

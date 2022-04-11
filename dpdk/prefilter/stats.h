@@ -18,30 +18,29 @@
 /**
  * \file
  *
- * \author Lukas Sismis <sismis@cesnet.com>
- *
+ * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
-#ifndef SURICATA_PREFILTER_H
-#define SURICATA_PREFILTER_H
+#ifndef STATS_H
+#define STATS_H
 
-#define _POSIX_C_SOUCRE 200809L
+#include <rte_atomic.h>
 
-#include <rte_eal.h>
-
-#include "dev-conf.h"
-
-struct resource_ring {
-    uint16_t ring_from_pf_arr_len;
-    struct rte_ring **ring_from_pf_arr;
-    uint16_t ring_to_pf_arr_len;
-    struct rte_ring **ring_to_pf_arr;
-    struct ring_conf *ring_conf;
+struct pf_stats {
+    rte_atomic64_t pkts_rx;
+    rte_atomic64_t pkts_tx;
+    rte_atomic64_t pkts_enq;
+    rte_atomic64_t pkts_deq;
 };
 
-struct resource_ctx {
-    uint16_t main_rings_cnt;
-    struct resource_ring *main_rings;
+struct lcore_stats {
+    int64_t pkts_rx;
+    int64_t pkts_tx;
+    int64_t pkts_enq;
+    int64_t pkts_deq;
 };
 
-#endif // SURICATA_PREFILTER_H
+int StatsInit(struct pf_stats **s);
+void StatsExitLog(struct pf_stats *s);
+
+#endif // STATS_H
