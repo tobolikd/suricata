@@ -44,7 +44,7 @@ void RingListInitHead(void)
 
 int RingListAddConf(const struct ring_list_entry *re)
 {
-    struct ring_list_entry *ring_entry = calloc(sizeof(struct ring_list_entry), 1);
+    struct ring_list_entry *ring_entry = rte_calloc("struct ring_list_entry", sizeof(struct ring_list_entry), 1, 0);
     if (ring_entry == NULL) {
         Log().error(ENOMEM, "No memory for ring entry\n");
         return -ENOMEM;
@@ -55,9 +55,29 @@ int RingListAddConf(const struct ring_list_entry *re)
     return 0;
 }
 
+void RingListDeinit(void)
+{
+    struct ring_list_entry *re;
+    while (!TAILQ_EMPTY(&tailq_ring_head)) {
+        re = TAILQ_FIRST(&tailq_ring_head);
+        TAILQ_REMOVE(&tailq_ring_head, re, entries);
+
+        if (re->pre_ring_conf != NULL)
+            rte_free(re->pre_ring_conf);
+
+        rte_free(re);
+    }
+}
+
 void DevConfInit(struct DeviceConfigurer ops)
 {
     devconf = ops;
+}
+
+void DevConfDeinit(void)
+{
+    devconf.Deinit();
+    RingListDeinit();
 }
 
 // after call to this function, it is assumed that RingList is populated
@@ -98,8 +118,8 @@ int DevConfRingsInit(void *ptr)
         ring_list_len++;
     }
 
-    ctx->main_rings = (struct resource_ring *)rte_calloc("struct resource_ring for the main rings",
-            sizeof(struct resource_ring), ring_list_len, 0);
+    ctx->main_rings = (struct main_ring *)rte_calloc("struct main_ring",
+            sizeof(struct main_ring), ring_list_len, 0);
     if (ctx->main_rings == NULL) {
         Log().error(ENOMEM, "Memory allocation failed for an array of main ring structures");
         return -ENOMEM;
@@ -151,12 +171,6 @@ int DevConfRingsInit(void *ptr)
             }
         }
 
-        ctx->main_rings[ring_list_entry_id].ring_conf = &re->main_ring;
-
         return 0;
-
-        // init bypass table
-
-        // init possibly bypass mempool
     }
 }

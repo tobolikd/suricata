@@ -30,8 +30,11 @@
 #include "prefilter.h"
 
 typedef int (*start_ring)(void *ring_conf);
-typedef int (*fill_ring)(void *ring_conf);
 typedef int (*stop_ring)(void *ring_conf);
+
+#define PREFILTER_CONFIG_OPERATION_MODE_PIPELINE "pipeline"
+#define PREFILTER_CONFIG_OPERATION_MODE_IPS      "ips"
+#define PREFILTER_CONFIG_OPERATION_MODE_IDS      "ids"
 
 enum PFOpMode {
     PIPELINE,
@@ -62,9 +65,6 @@ struct msgs_conf {
 };
 
 struct ring_list_entry {
-    // here I would like to have config separately for RX rings, bypass table, task ring...
-    // or at least already created instances of things / API functions
-    // e.g. (rte_ring *, bypass_table_lookup(), bypass_table...)
     uint16_t sec_app_cores_cnt;
     uint16_t pf_cores_cnt;
     struct ring_conf main_ring;
@@ -74,7 +74,6 @@ struct ring_list_entry {
     struct mempool_conf bypass_mempool;
     void *pre_ring_conf; // here should be stored either raw config or everything not covered before
     start_ring start;
-//    fill_ring fill;
     stop_ring stop;
     TAILQ_ENTRY(ring_list_entry) entries;
     TAILQ_HEAD(, ring_list_entry) head;
@@ -84,9 +83,11 @@ typedef TAILQ_HEAD(ring_tailq_head, ring_list_entry) ring_tailq_t;
 extern ring_tailq_t tailq_ring_head;
 
 typedef int (*configure_by)(void *conf);
+typedef void (*deinit)(void);
 
 struct DeviceConfigurer {
     configure_by ConfigureBy;
+    deinit Deinit;
 };
 
 const char *DevConfRingGetRxName(const char *base, uint16_t ring_id);
@@ -95,8 +96,10 @@ const char *DevConfRingGetTxName(const char *base, uint16_t ring_id);
 void DevConfInit(struct DeviceConfigurer ops);
 int DevConfRingsInit(void *ctx);
 int DevConfConfigureBy(void *conf);
+void DevConfDeinit(void);
 
 void RingListInitHead(void);
 int RingListAddConf(const struct ring_list_entry *re);
+void RingListDeinit(void);
 
 #endif // DEV_CONF_H

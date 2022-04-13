@@ -25,11 +25,13 @@
 #include <sys/queue.h>
 #include <rte_launch.h>
 #include <rte_lcore.h>
+#include <rte_malloc.h>
 
 #include "lcores-manager.h"
 #include "lcore-worker.h"
 #include "dev-conf.h"
 #include "logger.h"
+#include "util-prefilter.h"
 
 /**
  * For use-cases when the prefilter app has less lcores than the secondary app.
@@ -68,15 +70,13 @@ int LcoreManagerRunWorker(struct ring_list_entry *re, int32_t *last_lcore_id, st
         *last_lcore_id = (int32_t)rte_get_next_lcore(*last_lcore_id, 1, 0);
         if (*last_lcore_id >= RTE_MAX_LCORE) {
             Log().error(EINVAL, "Not enough lcores configured");
-
-//            HandleSig(SIGTERM);
-            return -1;
+            return -EINVAL;
         }
 
-        struct lcore_init *val = calloc(sizeof(struct lcore_init), 1);
+        struct lcore_init *val = rte_calloc("struct lcore_init", sizeof(struct lcore_init), 1, 0);
         if (val == NULL) {
             Log().error(ENOMEM, "Memory allocation failed for lcore init");
-            return -1;
+            return -ENOMEM;
         }
 
         LcoreManagerAssignRingsToLcore(val, rings_per_lcore, &next_ring, &leftover_rings);
@@ -99,11 +99,10 @@ int LcoreManagerRunWorkers(struct pf_stats *stats)
         Log().info("Spawning workers for %s", re->main_ring.name_base);
         retval = LcoreManagerRunWorker(re, &last_lcore_id, stats);
         if (retval != 0) {
-            // clean
+            Log().error(EINVAL, "Not able to spawn all workers, halting!");
+            StopWorkers();
             return retval;
         }
-//        retval = start()
-//        if () return
     }
     return 0;
 }

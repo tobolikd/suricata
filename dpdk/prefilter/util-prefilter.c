@@ -71,3 +71,8 @@ void SignalInit(void)
     signal(SIGINT, &SignalStop);
     signal(SIGTERM, &SignalStop);
 }
+
+void StopWorkers(void)
+{
+    g_should_stop = 1;
+}

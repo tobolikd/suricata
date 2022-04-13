@@ -136,23 +136,6 @@ const struct RingEntryAttributes pf_yaml = {
     },
 };
 
-#define PREFILTER_CONFIG_OPERATION_MODE_PIPELINE "pipeline"
-#define PREFILTER_CONFIG_OPERATION_MODE_IPS      "ips"
-#define PREFILTER_CONFIG_OPERATION_MODE_IDS      "ids"
-
-#define PREFILTER_CONFIG_DEFAULT_OPERATION_MODE              PREFILTER_CONFIG_OPERATION_MODE_IDS
-#define PREFILTER_CONFIG_DEFAULT_MEMPOOL_SIZE                65535
-#define PREFILTER_CONFIG_DEFAULT_MEMPOOL_CACHE_SIZE          "auto"
-#define PREFILTER_CONFIG_DEFAULT_RX_DESCRIPTORS              1024
-#define PREFILTER_CONFIG_DEFAULT_TX_DESCRIPTORS              1024
-#define PREFILTER_CONFIG_DEFAULT_MTU                         1500
-#define PREFILTER_CONFIG_DEFAULT_PROMISCUOUS_MODE            1
-#define PREFILTER_CONFIG_DEFAULT_MULTICAST_MODE              1
-#define PREFILTER_CONFIG_DEFAULT_CHECKSUM_VALIDATION         1
-#define PREFILTER_CONFIG_DEFAULT_CHECKSUM_VALIDATION_OFFLOAD 1
-#define PREFILTER_CONFIG_DEFAULT_COPY_MODE                   "none"
-#define PREFILTER_CONFIG_DEFAULT_COPY_INTERFACE              "none"
-
 #define PF_NODE_NAME_MAX 1024
 
 /**
@@ -634,7 +617,7 @@ int DevConfSuricataConfigureBy(void *conf)
         ConfNode *rings_node = ConfGetNode("rings");
         ConfNode *ring_node = ConfFindItemConfig(rings_node, itemname, live_dev_c);
         if (ring_node == NULL) {
-            SCLogNotice("Unable to find configuration for %s \"%s\"", itemname, live_dev_c);
+            Log().notice("Unable to find configuration for %s \"%s\"", itemname, live_dev_c);
         }
 
         struct ring_list_entry_suricata *rc =
@@ -662,4 +645,30 @@ int DevConfSuricataConfigureBy(void *conf)
     return 0;
 }
 
-struct DeviceConfigurer dev_conf_suricata_ops = { .ConfigureBy = DevConfSuricataConfigureBy };
+// TODO: Clean LiveDeviceList - LiveDeviceListClean() can not be used as it does multiple things
+void DevConfSuricataDeinit(void) {
+    int ret;
+    struct ring_list_entry *re;
+    struct ring_list_entry_suricata *sconf;
+    TAILQ_FOREACH (re, &tailq_ring_head, entries) {
+        sconf = (struct ring_list_entry_suricata *)re->pre_ring_conf;
+
+        ret = rte_eth_dev_close(sconf->nic_conf.port1_id);
+        if (ret != 0)
+            Log().error(-ret, "Error (%s): unable to close device %s", rte_strerror(-ret), sconf->nic_conf.port1_pcie);
+
+        if (re->opmode != IDS) {
+            ret = rte_eth_dev_close(sconf->nic_conf.port2_id);
+            if (ret != 0)
+                Log().error(-ret, "Error (%s): unable to close device %s", rte_strerror(-ret), sconf->nic_conf.port2_pcie);
+        }
+    }
+
+    ConfDeInit();
+    SCLogDeInitLogModule();
+}
+
+struct DeviceConfigurer dev_conf_suricata_ops = {
+    .ConfigureBy = DevConfSuricataConfigureBy,
+    .Deinit = DevConfSuricataDeinit,
+};

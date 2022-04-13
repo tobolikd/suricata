@@ -127,13 +127,9 @@ void ThreadSuricataRun(struct lcore_values *lv)
 
     while (!ShouldStop()) {
         pkt_count1 = rte_eth_rx_burst(lv->port1_id, lv->qid, pkts, BURST_SIZE);
-        if (pkt_count1)
-            Log().notice("Received %d pkts on %s", pkt_count1, lv->port1_addr);
 
         if (lv->opmode != IDS) {
             pkt_count2 = rte_eth_rx_burst(lv->port2_id, lv->qid, pkts + pkt_count1, BURST_SIZE);
-            if (pkt_count2)
-                Log().notice("Received %d pkts on %s", pkt_count2, lv->port2_addr);
         }
         lv->stats.pkts_rx += pkt_count1 + pkt_count2;
 
@@ -160,7 +156,6 @@ void ThreadSuricataRun(struct lcore_values *lv)
 
             // this could have been aggregated first to one array and then freed
             if (pkt_count < lv->rb[i].len) {
-                Log().debug("fail to enq");
                 rte_pktmbuf_free_bulk(lv->rb[i].buf + pkt_count, lv->rb[i].len - pkt_count);
             }
 
@@ -201,5 +196,25 @@ void ThreadSuricataRun(struct lcore_values *lv)
             }
         }
     }
-    Log().notice("Post doing some");
+}
+
+void ThreadSuricataDeinit(struct lcore_init *vals, struct lcore_values *lv) {
+    int ret;
+    if (vals != NULL)
+        rte_free(vals);
+    if (lv != NULL) {
+        if (lv->qid == 0) {
+            ret = rte_eth_dev_stop(lv->port1_id);
+            if (ret != 0)
+                Log().error(-ret, "Error (%s): unable to stop device %s", rte_strerror(-ret), lv->port1_addr);
+
+            if (lv->opmode != IDS) {
+                rte_eth_dev_stop(lv->port2_id);
+                if (ret != 0)
+                    Log().error(-ret, "Error (%s): unable to stop device %s", rte_strerror(-ret), lv->port2_addr);
+            }
+        }
+
+        rte_free(lv);
+    }
 }

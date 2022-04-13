@@ -27,5 +27,6 @@
 
 int ShouldStop(void);
 void SignalInit(void);
+void StopWorkers(void);
 
 #endif // SURICATA_UTIL_PREFILTER_H

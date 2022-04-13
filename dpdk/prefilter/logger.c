@@ -22,13 +22,33 @@
  *
  */
 
+#include <string.h>
+#include <stdio.h>
 #include "logger.h"
 
 LogLevelEnum LogLevel;
 struct logger_ops logger;
 
-void LoggerInitOps(struct logger_ops ops) {
+LogLevelEnum LoggerGetLogLevelFromString(const char *str) {
+    if (strcmp(str, "debug") == 0) {
+        return PF_DEBUG;
+    } else if (strcmp(str, "info") == 0) {
+        return PF_INFO;
+    } else if (strcmp(str, "notice") == 0) {
+        return PF_NOTICE;
+    } else if (strcmp(str, "warning") == 0) {
+        return PF_WARNING;
+    } else if (strcmp(str, "error") == 0) {
+        return PF_ERROR;
+    } else {
+        fprintf(stderr, "Log level \"%s\"not supported, setting to info\n", str);
+        return PF_INFO;
+    }
+}
+
+void LoggerInit(struct logger_ops ops, LogLevelEnum lvl) {
     logger = ops;
+    LogLevel = lvl;
 }
 
 struct logger_ops Log() {

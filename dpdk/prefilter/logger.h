@@ -42,7 +42,8 @@ struct logger_ops {
     log_error error;
 };
 
-void LoggerInitOps(struct logger_ops ops);
+void LoggerInit(struct logger_ops ops, LogLevelEnum lvl);
+LogLevelEnum LoggerGetLogLevelFromString(const char *str);
 struct logger_ops Log();
 
 #endif // SURICATA_LOGGER_H

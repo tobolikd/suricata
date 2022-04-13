@@ -42,5 +42,6 @@ struct lcore_stats {
 
 int StatsInit(struct pf_stats **s);
 void StatsExitLog(struct pf_stats *s);
+void StatsDeinit(struct pf_stats *s);
 
 #endif // STATS_H

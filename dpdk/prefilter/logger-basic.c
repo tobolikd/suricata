@@ -24,11 +24,14 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "logger-basic.h"
 
 #ifndef LOGGER_BASIC_C
 #define LOGGER_BASIC_C
+
+#define PF_LOG_MAX_LOG_MSG_LEN 2048
 
 struct logger_ops logger_basic_ops = {
     .debug = LoggerBasicDebug,
@@ -42,60 +45,65 @@ void LoggerBasicDebug(char *format, ...) {
     if (LogLevel > PF_DEBUG)
         return;
 
+    char msg[PF_LOG_MAX_LOG_MSG_LEN] = "DEBUG - ";
+    char *msg_text = msg + strlen(msg);
     va_list ap;
-    fprintf(stdout,"DEBUG - ");
-    va_start(ap,format);
-    vfprintf(stdout,format,ap);
+    va_start(ap, format);
+    vsnprintf(msg_text, sizeof(msg) - strlen(msg), format, ap);
     va_end(ap);
-    fprintf(stdout,"\n");
+    fprintf(stdout,"%s\n", msg);
 }
 
 void LoggerBasicInfo(char *format, ...) {
     if (LogLevel > PF_INFO)
         return;
 
+    char msg[PF_LOG_MAX_LOG_MSG_LEN] = "INFO - ";
+    char *msg_text = msg + strlen(msg);
     va_list ap;
-    fprintf(stdout,"INFO - ");
-    va_start(ap,format);
-    vfprintf(stdout,format,ap);
+    va_start(ap, format);
+    vsnprintf(msg_text, sizeof(msg) - strlen(msg), format, ap);
     va_end(ap);
-    fprintf(stdout,"\n");
+    fprintf(stdout,"%s\n", msg);
 }
 
 void LoggerBasicNotice(char *format, ...) {
     if (LogLevel > PF_NOTICE)
         return;
 
+    char msg[PF_LOG_MAX_LOG_MSG_LEN] = "NOTICE - ";
+    char *msg_text = msg + strlen(msg);
     va_list ap;
-    fprintf(stdout,"NOTICE - ");
-    va_start(ap,format);
-    vfprintf(stdout,format,ap);
+    va_start(ap, format);
+    vsnprintf(msg_text, sizeof(msg) - strlen(msg), format, ap);
     va_end(ap);
-    fprintf(stdout,"\n");
+    fprintf(stdout,"%s\n", msg);
 }
 
 void LoggerBasicWarning(int code, char *format, ...) {
     if (LogLevel > PF_WARNING)
         return;
 
+    char msg[PF_LOG_MAX_LOG_MSG_LEN] = "WARNING - ";
+    char *msg_text = msg + strlen(msg);
     va_list ap;
-    fprintf(stderr,"WARNING - ");
-    va_start(ap,format);
-    vfprintf(stderr,format,ap);
+    va_start(ap, format);
+    vsnprintf(msg_text, sizeof(msg) - strlen(msg), format, ap);
     va_end(ap);
-    fprintf(stderr,"\n");
+    fprintf(stderr,"%s\n", msg);
 }
 
 void LoggerBasicError(int code, char *format, ...) {
     if (LogLevel > PF_ERROR)
         return;
 
+    char msg[PF_LOG_MAX_LOG_MSG_LEN] = "ERROR - ";
+    char *msg_text = msg + strlen(msg);
     va_list ap;
-    fprintf(stderr,"ERROR - ");
-    va_start(ap,format);
-    vfprintf(stderr,format,ap);
+    va_start(ap, format);
+    vsnprintf(msg_text, sizeof(msg) - strlen(msg), format, ap);
     va_end(ap);
-    fprintf(stderr,"\n");
+    fprintf(stderr,"%s\n", msg);
 }
 
 #endif /* LOGGER_BASIC_C */

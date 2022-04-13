@@ -31,17 +31,17 @@
 
 #include "dev-conf.h"
 
-struct resource_ring {
+struct main_ring {
     uint16_t ring_from_pf_arr_len;
     struct rte_ring **ring_from_pf_arr;
     uint16_t ring_to_pf_arr_len;
     struct rte_ring **ring_to_pf_arr;
-    struct ring_conf *ring_conf;
 };
 
 struct resource_ctx {
     uint16_t main_rings_cnt;
-    struct resource_ring *main_rings;
+    struct main_ring *main_rings;
+    struct pf_stats *app_stats;
 };
 
 #endif // SURICATA_PREFILTER_H

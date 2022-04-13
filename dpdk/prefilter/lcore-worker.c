@@ -45,5 +45,8 @@ int ThreadMain(void *init_values)
     rte_atomic64_add(&vals->stats->pkts_enq, lv->stats.pkts_enq);
     rte_atomic64_add(&vals->stats->pkts_deq, lv->stats.pkts_deq);
 
+    // clean lcore_values and lcore_init
+    ThreadSuricataDeinit(vals, lv);
+
     return 0;
 }

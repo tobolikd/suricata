@@ -27,8 +27,7 @@
 
 int StatsInit(struct pf_stats **s)
 {
-    *s = (struct pf_stats *)rte_calloc("struct pf_stats",
-            sizeof(struct pf_stats), 1, 0);
+    *s = (struct pf_stats *)rte_calloc("struct pf_stats", sizeof(struct pf_stats), 1, 0);
     if (*s == NULL) {
         Log().error(ENOMEM, "Memory allocation failed for prefilter stats");
         return -ENOMEM;
@@ -50,3 +49,8 @@ void StatsExitLog(struct pf_stats *s)
     Log().notice("Packets transmitted: %lu", rte_atomic64_read(&s->pkts_tx));
 }
 
+void StatsDeinit(struct pf_stats *s)
+{
+    if (s != NULL)
+        rte_free(s);
+}
