@@ -21,6 +21,12 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
+#define PCRE2_CODE_UNIT_WIDTH 8
+#define _POSIX_C_SOURCE       200809L
+#include <string.h>
+#include <netinet/in.h>
+#include <dirent.h>
+
 #include "lcore-worker-suricata.h"
 #include "lcores-manager.h"
 #include "lcore-worker.h"
@@ -31,6 +37,18 @@
 
 #include <rte_ethdev.h>
 #include <rte_malloc.h>
+
+#include "suricata-common.h"
+#include "conf.h"
+#include "conf-yaml-loader.h"
+#include "util-atomic.h"
+#include "tm-threads-common.h"
+#include "threads.h"
+#include "util-device.h"
+#include "util-debug.h"
+#include "util-dpdk.h"
+#include "runmode-dpdk.h"
+#include "source-dpdk.h"
 
 #define PKT_ORIGIN_PORT1 PKT_FIRST_FREE
 //#undef PKT_FIRST_FREE
@@ -45,21 +63,25 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
 
     struct lcore_values *lv = rte_calloc("struct lcore_values", 1, sizeof(struct lcore_values), 0);
     if (lv == NULL) {
-        Log().error(EINVAL, "Error (%s): memory allocation error of lcore_values for ring %s lcoreid %u", rte_strerror(rte_errno), re->main_ring.name_base, rte_lcore_id());
+        Log().error(EINVAL,
+                "Error (%s): memory allocation error of lcore_values for ring %s lcoreid %u",
+                rte_strerror(rte_errno), re->main_ring.name_base, rte_lcore_id());
         return NULL;
     }
 
     lv->port1_addr = suri_entry->nic_conf.port1_pcie;
     ret = rte_eth_dev_get_port_by_name(lv->port1_addr, &lv->port1_id);
     if (ret != 0) {
-        Log().error(EINVAL, "Error (%s): Unable to obtain port qid of %s", rte_strerror(-ret), lv->port1_addr);
+        Log().error(EINVAL, "Error (%s): Unable to obtain port qid of %s", rte_strerror(-ret),
+                lv->port1_addr);
         return NULL;
     }
 
     lv->port2_addr = suri_entry->nic_conf.port2_pcie;
     ret = rte_eth_dev_get_port_by_name(lv->port2_addr, &lv->port2_id);
     if (ret != 0) {
-        Log().error(EINVAL, "Error (%s): Unable to obtain port qid of %s", rte_strerror(-ret), lv->port2_addr);
+        Log().error(EINVAL, "Error (%s): Unable to obtain port qid of %s", rte_strerror(-ret),
+                lv->port2_addr);
         return NULL;
     }
 
@@ -69,7 +91,8 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
     lv->ring_offset_start = init_vals->ring_offset_start;
     lv->rings_cnt = init_vals->rings_cnt;
 
-    lv->rings_from_pf = rte_calloc("struct rte_ring *", lv->rings_cnt, sizeof(struct rte_ring *), 0);
+    lv->rings_from_pf =
+            rte_calloc("struct rte_ring *", lv->rings_cnt, sizeof(struct rte_ring *), 0);
     lv->rings_to_pf = rte_calloc("struct rte_ring *", lv->rings_cnt, sizeof(struct rte_ring *), 0);
 
     // find rings
@@ -79,7 +102,8 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
         const char *name = DevConfRingGetRxName(re->main_ring.name_base, ring_id);
         r = rte_ring_lookup(name);
         if (r == NULL) {
-            Log().error(EINVAL, "Error (%s): unable to find ring %s", rte_strerror(rte_errno), name);
+            Log().error(
+                    EINVAL, "Error (%s): unable to find ring %s", rte_strerror(rte_errno), name);
             return NULL;
         }
 
@@ -89,7 +113,8 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
             name = DevConfRingGetTxName(re->main_ring.name_base, ring_id);
             r = rte_ring_lookup(name);
             if (r == NULL) {
-                Log().error(EINVAL, "Error (%s): unable to find ring %s", rte_strerror(rte_errno), name);
+                Log().error(EINVAL, "Error (%s): unable to find ring %s", rte_strerror(rte_errno),
+                        name);
                 return NULL;
             }
 
@@ -100,15 +125,92 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
     // allocate pkt ring buffer
     lv->rb = rte_calloc("ring_buffer", sizeof(ring_buffer), init_vals->rings_cnt, 0);
     if (lv->rb == NULL) {
-        Log().error(EINVAL, "Error (%s): Unable to allocate memory for ring queues of ring %s lcoreid %u", rte_strerror(-ret), re->main_ring.name_base, lv->qid);
+        Log().error(EINVAL,
+                "Error (%s): Unable to allocate memory for ring queues of ring %s lcoreid %u",
+                rte_strerror(-ret), re->main_ring.name_base, lv->qid);
         return NULL;
     }
 
     return lv;
 }
 
+static int ThreadSuricataStartPort(
+        uint16_t pid, const char *pname, const struct lcore_values *const lv)
+{
+    int ret;
+    struct rte_eth_dev_info port_info;
+    ret = rte_eth_dev_info_get(pid, &port_info);
+    if (ret != 0) {
+        Log().error(ret, "Error (%s) when getting port info of %s", rte_strerror(-ret),
+                pname);
+        return ret;
+    }
+
+    ret = rte_eth_dev_start(pid);
+    if (ret != 0) {
+        Log().error(ret, "Error (%s) when starting port %s", rte_strerror(-ret), pname);
+        return ret;
+    }
+
+    DevicePostStartPMDSpecificActions(pid, lv->rings_cnt, port_info.driver_name);
+    return 0;
+}
+
+static int ThreadSuricataStartPorts(const struct lcore_values *const lv)
+{
+    int ret;
+    ret = ThreadSuricataStartPort(lv->port1_id, lv->port1_addr, lv);
+    if (ret != 0)
+        return ret;
+
+    if (lv->opmode != IDS) {
+        ret = ThreadSuricataStartPort(lv->port2_id, lv->port2_addr, lv);
+        if (ret != 0)
+            return ret;
+    }
+
+    return 0;
+}
+
+static int ThreadSuricataStopPort(uint16_t pid, const char *pname)
+{
+    int ret;
+    struct rte_eth_dev_info port_info;
+    ret = rte_eth_dev_info_get(pid, &port_info);
+    if (ret != 0) {
+        Log().error(ret, "Error (%s) when getting port info of %s", rte_strerror(-ret),
+                pname);
+        return ret;
+    }
+
+    DevicePreStopPMDSpecificActions(pid, port_info.driver_name);
+    ret = rte_eth_dev_stop(pid);
+    if (ret != 0) {
+        Log().error(ret, "Error (%s) when stopping port %s", rte_strerror(-ret), pname);
+        return ret;
+    }
+    return 0;
+}
+
+static int ThreadSuricataStopPorts(const struct lcore_values *const lv)
+{
+    int ret;
+    ret = ThreadSuricataStopPort(lv->port1_id, lv->port1_addr);
+    if (ret != 0)
+        return ret;
+
+    if (lv->opmode != IDS) {
+        ret = ThreadSuricataStopPort(lv->port2_id, lv->port2_addr);
+        if (ret != 0)
+            return ret;
+    }
+
+    return 0;
+}
+
 void ThreadSuricataRun(struct lcore_values *lv)
 {
+    int ret;
     uint32_t pkt_count = 0, pkt_count1 = 0, pkt_count2 = 0;
     uint16_t queue_id;
     struct rte_mbuf *pkts[2 * BURST_SIZE] = { NULL };
@@ -120,9 +222,11 @@ void ThreadSuricataRun(struct lcore_values *lv)
         Log().notice("Lcore %u trying to rcv from %s (p%d)", lv->qid, lv->port2_addr, lv->port2_id);
 
     if (lv->qid == 0) {
-        rte_eth_dev_start(lv->port1_id);
-        if (lv->opmode != IDS)
-            rte_eth_dev_start(lv->port2_id);
+        ret = ThreadSuricataStartPorts(lv);
+        if (ret != 0) {
+            StopWorkers();
+            return;
+        }
     }
 
     while (!ShouldStop()) {
@@ -148,13 +252,14 @@ void ThreadSuricataRun(struct lcore_values *lv)
         }
 
         for (uint16_t i = 0; i < lv->rings_cnt; i++) {
-            pkt_count = rte_ring_enqueue_burst(lv->rings_from_pf[i], (void **)lv->rb[i].buf, lv->rb[i].len, NULL);
+            pkt_count = rte_ring_enqueue_burst(
+                    lv->rings_from_pf[i], (void **)lv->rb[i].buf, lv->rb[i].len, NULL);
             lv->stats.pkts_enq += pkt_count;
             if (pkt_count > 0) {
                 Log().debug("ENQ %d packet/s to rxring %s", pkt_count, lv->rings_from_pf[i]->name);
             }
 
-            // this could have been aggregated first to one array and then freed
+            // TODO: optimization - aggregate non-enqueued pkts from all rings and free all at once
             if (pkt_count < lv->rb[i].len) {
                 rte_pktmbuf_free_bulk(lv->rb[i].buf + pkt_count, lv->rb[i].len - pkt_count);
             }
@@ -165,19 +270,25 @@ void ThreadSuricataRun(struct lcore_values *lv)
         if (lv->opmode != IDS) {
             // deq
             for (uint16_t ring_id = 0; ring_id < lv->rings_cnt; ring_id++) {
-                pkt_count = rte_ring_dequeue_burst(lv->rings_to_pf[ring_id], (void **)lv->rb[ring_id].buf, BURST_SIZE * 2, NULL);
+                pkt_count = rte_ring_dequeue_burst(lv->rings_to_pf[ring_id],
+                        (void **)lv->rb[ring_id].buf, BURST_SIZE * 2, NULL);
                 lv->stats.pkts_deq += pkt_count;
                 if (pkt_count > 0) {
-                    Log().debug("DEQ %d packet/s from txring %s\n", pkt_count, lv->rings_to_pf[ring_id]->name);
+                    Log().debug("DEQ %d packet/s from txring %s\n", pkt_count,
+                            lv->rings_to_pf[ring_id]->name);
                 }
                 lv->rb[ring_id].len = pkt_count;
                 pkt_count1 = 0;
                 pkt_count2 = 0;
                 for (uint16_t i = 0; i < lv->rb[ring_id].len; i++) {
-                    if (lv->rb[ring_id].buf[i]->ol_flags & PKT_ORIGIN_PORT1)
+                    if (lv->rb[ring_id].buf[i]->ol_flags & PKT_ORIGIN_PORT1) {
+                        Log().debug("Pkt direction %s -> %s", lv->port1_addr, lv->port2_addr);
                         pkts[pkt_count1++] = lv->rb[ring_id].buf[i];
-                    else
+                    } else {
+                        Log().debug("Pkt direction %s -> %s", lv->port2_addr, lv->port1_addr);
                         pkts_nic2[pkt_count2++] = lv->rb[ring_id].buf[i];
+                    }
+
                 }
                 lv->rb[ring_id].len = 0;
             }
@@ -196,25 +307,18 @@ void ThreadSuricataRun(struct lcore_values *lv)
             }
         }
     }
+
+    if (lv->qid == 0) {
+        ThreadSuricataStopPorts(lv);
+    }
 }
 
-void ThreadSuricataDeinit(struct lcore_init *vals, struct lcore_values *lv) {
+void ThreadSuricataDeinit(struct lcore_init *vals, struct lcore_values *lv)
+{
     int ret;
     if (vals != NULL)
         rte_free(vals);
     if (lv != NULL) {
-        if (lv->qid == 0) {
-            ret = rte_eth_dev_stop(lv->port1_id);
-            if (ret != 0)
-                Log().error(-ret, "Error (%s): unable to stop device %s", rte_strerror(-ret), lv->port1_addr);
-
-            if (lv->opmode != IDS) {
-                rte_eth_dev_stop(lv->port2_id);
-                if (ret != 0)
-                    Log().error(-ret, "Error (%s): unable to stop device %s", rte_strerror(-ret), lv->port2_addr);
-            }
-        }
-
         rte_free(lv);
     }
 }

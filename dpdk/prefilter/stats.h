@@ -40,8 +40,8 @@ struct lcore_stats {
     int64_t pkts_deq;
 };
 
-int StatsInit(struct pf_stats **s);
-void StatsExitLog(struct pf_stats *s);
-void StatsDeinit(struct pf_stats *s);
+int PFStatsInit(struct pf_stats **s);
+void PFStatsExitLog(struct pf_stats *s);
+void PFStatsDeinit(struct pf_stats *s);
 
 #endif // STATS_H

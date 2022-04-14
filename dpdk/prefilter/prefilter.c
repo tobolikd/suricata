@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
     if (ret != 0)
         goto cleanup;
 
-    ret = StatsInit(&ctx.app_stats);
+    ret = PFStatsInit(&ctx.app_stats);
     if (ret != 0)
         goto cleanup;
 
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
 
 cleanup:
     rte_eal_mp_wait_lcore();
-    StatsExitLog(ctx.app_stats);
+    PFStatsExitLog(ctx.app_stats);
 
     for (int i = 0; i < ctx.main_rings_cnt; i++) {
         if (ctx.main_rings != NULL) {
@@ -172,7 +172,7 @@ cleanup:
             }
         }
     }
-    StatsDeinit(ctx.app_stats);
+    PFStatsDeinit(ctx.app_stats);
     DevConfDeinit();
     rte_eal_cleanup();
 

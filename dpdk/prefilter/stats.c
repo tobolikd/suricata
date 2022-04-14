@@ -25,7 +25,7 @@
 #include "stats.h"
 #include "logger.h"
 
-int StatsInit(struct pf_stats **s)
+int PFStatsInit(struct pf_stats **s)
 {
     *s = (struct pf_stats *)rte_calloc("struct pf_stats", sizeof(struct pf_stats), 1, 0);
     if (*s == NULL) {
@@ -41,7 +41,7 @@ int StatsInit(struct pf_stats **s)
     return 0;
 }
 
-void StatsExitLog(struct pf_stats *s)
+void PFStatsExitLog(struct pf_stats *s)
 {
     Log().notice("Packets received: %lu", rte_atomic64_read(&s->pkts_rx));
     Log().notice("Packets enqueued: %lu", rte_atomic64_read(&s->pkts_enq));
@@ -49,7 +49,7 @@ void StatsExitLog(struct pf_stats *s)
     Log().notice("Packets transmitted: %lu", rte_atomic64_read(&s->pkts_tx));
 }
 
-void StatsDeinit(struct pf_stats *s)
+void PFStatsDeinit(struct pf_stats *s)
 {
     if (s != NULL)
         rte_free(s);
