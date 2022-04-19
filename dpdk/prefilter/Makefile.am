@@ -15,7 +15,7 @@ SRCS = \
     stats.c
 
 # Build using pkg-config variables if possible
-if !DPDK_PKG_CONFIG
+if !BUILD_DPDK
 $(error "no installation of DPDK found")
 endif
 
@@ -32,14 +32,6 @@ PC_FILE = $(shell $(PKGCONF) --path libdpdk 2>/dev/null)
 CFLAGS += -O3 $(shell $(PKGCONF) --cflags libdpdk) -I $(CONFIGURE_PREFIX)/include/suricata/ -I $(CONFIGURE_PREFIX)/include/ -DHAVE_DPDK -DTLS_C11
 LDFLAGS_SHARED = $(shell $(PKGCONF) --libs libdpdk) -L $(CONFIGURE_PREFIX)/lib/ -lsuricata -lhtp $(LIBS)
 LDFLAGS_STATIC = $(shell $(PKGCONF) --static --libs libdpdk)
-
-if DPDK_MAKECMDGOALS
-# check for broken pkg-config
-if DPDK_LDFLAGS_STATIC
-$(warning "pkg-config output list does not contain drivers between 'whole-archive'/'no-whole-archive' flags.")
-$(error "Cannot generate statically-linked binaries with this version of pkg-config")
-endif
-endif
 
 CFLAGS += -I. -DALLOW_EXPERIMENTAL_API
 

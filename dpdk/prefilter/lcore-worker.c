@@ -37,6 +37,7 @@ int ThreadMain(void *init_values)
         return -EINVAL;
 
     ThreadSuricataRun(lv);
+    ThreadSuricataExitStats(lv);
 
     struct lcore_init *vals = (struct lcore_init *)init_values;
 

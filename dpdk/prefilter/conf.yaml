@@ -13,7 +13,7 @@ message-mempool:
 
 rings:
   - ring: "myring"
-    elements: 4096
+    elements: 32768
     op-mode: ips # ids / ips / pipeline
     secondary-app-lcores: 4
     pf-lcores: 2
@@ -40,7 +40,7 @@ rings:
       # To approximately calculate required amount of space (in bytes) for interface's mempool: mempool-size * mtu
       # Make sure you have enough allocated hugepages.
       # The optimum size for the packet memory pool (in terms of memory usage) is power of two minus one: n = (2^q - 1)
-      mempool-size: 65535 # The number of elements in the mbuf pool
+      mempool-size: 262143 # The number of elements in the mbuf pool
 
       # Mempool cache size must be lower or equal to:
       #     - RTE_MEMPOOL_CACHE_MAX_SIZE (by default 512) and
@@ -50,9 +50,9 @@ rings:
       # The cache can be disabled if the cache_size argument is set to 0, can be useful to avoid losing objects in cache
       # If the value is empty or set to "auto", Suricata will attempt to set cache size of the mempool to a value
       # that matches the previously mentioned recommendations
-      mempool-cache-size: 257
-      rx-descriptors: 1024
-      tx-descriptors: 1024
+      mempool-cache-size: 511
+      rx-descriptors: 16384
+      tx-descriptors: 16384
 #
 #  - ring: "sda"
 #    elements: 4096

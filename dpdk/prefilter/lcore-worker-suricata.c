@@ -213,6 +213,7 @@ void ThreadSuricataRun(struct lcore_values *lv)
     int ret;
     uint32_t pkt_count = 0, pkt_count1 = 0, pkt_count2 = 0;
     uint16_t queue_id;
+    uint64_t ring_cntrs[16] = {0};
     struct rte_mbuf *pkts[2 * BURST_SIZE] = { NULL };
     struct rte_mbuf *pkts_nic2[2 * BURST_SIZE] = { NULL };
     memset(&lv->stats, 0, sizeof(lv->stats)); // null the stats
@@ -238,17 +239,23 @@ void ThreadSuricataRun(struct lcore_values *lv)
         lv->stats.pkts_rx += pkt_count1 + pkt_count2;
 
         for (uint32_t i = 0; i < pkt_count1; i++) {
-            queue_id = pkts[i]->hash.rss % lv->rings_cnt;
+            uint32_t pkt_rss_hash = pkts[i]->hash.rss >> 8;
+            queue_id = pkt_rss_hash % lv->rings_cnt;
+            Log().debug("port1 pkt - pkt_rss_hash orig %u pkt_rss_hash edit %u queue %d/%d lcore %d", pkts[i]->hash.rss, pkt_rss_hash, queue_id, lv->rings_cnt, rte_lcore_id());
             lv->rb[queue_id].buf[lv->rb[queue_id].len] = pkts[i];
             lv->rb[queue_id].buf[lv->rb[queue_id].len]->ol_flags |= PKT_ORIGIN_PORT1;
             lv->rb[queue_id].len++;
+            ring_cntrs[queue_id] += 1;
         }
 
         for (uint32_t i = pkt_count1; i < pkt_count1 + pkt_count2; i++) {
-            queue_id = pkts[i]->hash.rss % lv->rings_cnt;
+            uint32_t pkt_rss_hash = (pkts[i]->hash.rss >> 8);
+            queue_id = pkt_rss_hash % lv->rings_cnt;
+            Log().debug("port2 pkt - pkt_rss_hash orig %u pkt_rss_hash edit %u queue %d/%d lcore %d", pkts[i]->hash.rss, pkt_rss_hash, queue_id, lv->rings_cnt, rte_lcore_id());
             lv->rb[queue_id].buf[lv->rb[queue_id].len] = pkts[i];
             lv->rb[queue_id].buf[lv->rb[queue_id].len]->ol_flags &= ~PKT_ORIGIN_PORT1;
             lv->rb[queue_id].len++;
+            ring_cntrs[queue_id]++;
         }
 
         for (uint16_t i = 0; i < lv->rings_cnt; i++) {
@@ -261,7 +268,7 @@ void ThreadSuricataRun(struct lcore_values *lv)
 
             // TODO: optimization - aggregate non-enqueued pkts from all rings and free all at once
             if (pkt_count < lv->rb[i].len) {
-                rte_pktmbuf_free_bulk(lv->rb[i].buf + pkt_count, lv->rb[i].len - pkt_count);
+                rte_pktmbuf_free_bulk(&lv->rb[i].buf[pkt_count], lv->rb[i].len - pkt_count);
             }
 
             lv->rb[i].len = 0;
@@ -270,14 +277,14 @@ void ThreadSuricataRun(struct lcore_values *lv)
         if (lv->opmode != IDS) {
             // deq
             for (uint16_t ring_id = 0; ring_id < lv->rings_cnt; ring_id++) {
-                pkt_count = rte_ring_dequeue_burst(lv->rings_to_pf[ring_id],
+                lv->rb[ring_id].len = rte_ring_dequeue_burst(lv->rings_to_pf[ring_id],
                         (void **)lv->rb[ring_id].buf, BURST_SIZE * 2, NULL);
-                lv->stats.pkts_deq += pkt_count;
-                if (pkt_count > 0) {
-                    Log().debug("DEQ %d packet/s from txring %s\n", pkt_count,
+                lv->stats.pkts_deq += lv->rb[ring_id].len;
+                if (lv->rb[ring_id].len > 0) {
+                    Log().debug("DEQ %d packet/s from txring %s\n", lv->rb[ring_id].len,
                             lv->rings_to_pf[ring_id]->name);
                 }
-                lv->rb[ring_id].len = pkt_count;
+
                 pkt_count1 = 0;
                 pkt_count2 = 0;
                 for (uint16_t i = 0; i < lv->rb[ring_id].len; i++) {
@@ -290,20 +297,21 @@ void ThreadSuricataRun(struct lcore_values *lv)
                     }
 
                 }
+
+                // tx to ports
+                pkt_count = rte_eth_tx_burst(lv->port1_id, lv->qid, pkts, pkt_count1);
+                lv->stats.pkts_tx += pkt_count;
+                if (pkt_count < pkt_count1) {
+                    rte_pktmbuf_free_bulk(pkts + pkt_count, pkt_count1 - pkt_count);
+                }
+
+                pkt_count = rte_eth_tx_burst(lv->port2_id, lv->qid, pkts_nic2, pkt_count2);
+                lv->stats.pkts_tx += pkt_count;
+                if (pkt_count < pkt_count2) {
+                    rte_pktmbuf_free_bulk(pkts_nic2 + pkt_count, pkt_count2 - pkt_count);
+                }
+
                 lv->rb[ring_id].len = 0;
-            }
-
-            // tx to ports
-            pkt_count = rte_eth_tx_burst(lv->port1_id, lv->qid, pkts, pkt_count1);
-            lv->stats.pkts_tx += pkt_count;
-            if (pkt_count < pkt_count1) {
-                rte_pktmbuf_free_bulk(pkts + pkt_count, pkt_count1 - pkt_count);
-            }
-
-            pkt_count = rte_eth_tx_burst(lv->port2_id, lv->qid, pkts_nic2, pkt_count2);
-            lv->stats.pkts_tx += pkt_count;
-            if (pkt_count < pkt_count2) {
-                rte_pktmbuf_free_bulk(pkts_nic2 + pkt_count, pkt_count2 - pkt_count);
             }
         }
     }
@@ -311,6 +319,11 @@ void ThreadSuricataRun(struct lcore_values *lv)
     if (lv->qid == 0) {
         ThreadSuricataStopPorts(lv);
     }
+}
+
+void ThreadSuricataExitStats(struct lcore_values *lv)
+{
+    Log().notice("STATS lcore id %d: rx pkts: %lu enq pkts: %lu deq pkts: %lu tx pkts: %lu", rte_lcore_id(), lv->stats.pkts_rx, lv->stats.pkts_enq, lv->stats.pkts_deq, lv->stats.pkts_tx);
 }
 
 void ThreadSuricataDeinit(struct lcore_init *vals, struct lcore_values *lv)
