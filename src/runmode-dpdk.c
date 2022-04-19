@@ -1109,9 +1109,9 @@ static void DeviceInitPortConf(const DPDKIfaceConfig *iconf,
     };
 
     // configure RX offloads
-    if (dev_info->rx_offload_capa & RTE_ETH_RX_OFFLOAD_RSS_HASH) {
-        if (iconf->nb_rx_queues > 1) {
-            SCLogConfig("%s: RSS enabled for %d queues", iconf->iface, iconf->nb_rx_queues);
+    if (dev_info->rx_offload_capa & DEV_RX_OFFLOAD_RSS_HASH) {
+        if (iconf->nb_rx_queues >= 1) {
+            SCLogConfig("RSS enabled on %s for %d queues", iconf->iface, iconf->nb_rx_queues);
             port_conf->rx_adv_conf.rss_conf = (struct rte_eth_rss_conf){
                 .rss_key = rss_hkey,
                 .rss_key_len = RSS_HKEY_LEN,
