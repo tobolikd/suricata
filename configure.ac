@@ -1377,6 +1377,14 @@
         fi
         LIBS="${LIBS} ${DPDK_RPATH} `pkg-config --libs libdpdk`"
         DPDK_PKG_CONFIG_VAR="$(pkg-config --exists libdpdk && echo 0)"
+        LIBDPDK_PC_FILE="$(pkg-config --path libdpdk 2>/dev/null)"
+        AC_SUBST(LIBDPDK_PC_FILE)
+        LIBDPDK_CFLAGS="$(pkg-config --cflags libdpdk)"
+        AC_SUBST(LIBDPDK_CFLAGS)
+        LIBDPDK_LDFLAGS_SHARED="$(pkg-config --libs libdpdk)"
+        AC_SUBST(LIBDPDK_LDFLAGS_SHARED)
+        LIBDPDK_LDFLAGS_STATIC="$(pkg-config --static --libs libdpdk)"
+        AC_SUBST(LIBDPDK_LDFLAGS_STATIC)
     ])
     AM_CONDITIONAL([BUILD_DPDK], [test "x$DPDK_PKG_CONFIG_VAR" = x0])
 
@@ -2536,8 +2544,7 @@ AC_CONFIG_FILES(suricata.yaml etc/Makefile etc/suricata.logrotate etc/suricata.s
 AC_CONFIG_FILES(python/Makefile python/suricata/config/defaults.py)
 AC_CONFIG_FILES(ebpf/Makefile)
 AC_CONFIG_FILES(libsuricata-config)
-AC_CONFIG_FILES(dpdk/Makefile)
-AC_CONFIG_FILES(dpdk/prefilter/Makefile)
+AC_CONFIG_FILES(dpdk/Makefile dpdk/prefilter/Makefile)
 AC_OUTPUT
 
 SURICATA_BUILD_CONF="Suricata Configuration:

@@ -1,15 +1,17 @@
 TOPTARGETS = all clean check
-DPDK_SUBDIRS = prefilter
+SUBDIRS = prefilter
 
 if BUILD_DPDK
 
-$(TOPTARGETS): $(DPDK_SUBDIRS)
-$(DPDK_SUBDIRS):
-	$(MAKE) -C $@
+$(TOPTARGETS): $(SUBDIRS)
+$(SUBDIRS):
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 install:
 
 
-.PHONY: $(TOPTARGETS) $(DPDK_SUBDIRS)
+
+
+.PHONY: $(TOPTARGETS) $(SUBDIRS)
 
 endif
