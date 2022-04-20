@@ -1376,6 +1376,12 @@
             DPDK_RPATH="-Wl,-R,`${dpdk_libs_cut}`"
         fi
         LIBS="${LIBS} ${DPDK_RPATH} `pkg-config --libs libdpdk`"
+    ])
+
+    AC_ARG_ENABLE(dpdk-apps,
+                AS_HELP_STRING([--enable-dpdk-apps], [Enable support for DPDK applications [default=no]]),
+                            [enable_dpdk_apps=$enableval],[enable_dpdk_apps=no])
+    AS_IF([test "x$enable_dpdk_apps" = "xyes"], [
         DPDK_PKG_CONFIG_VAR="$(pkg-config --exists libdpdk && echo 0)"
         LIBDPDK_PC_FILE="$(pkg-config --path libdpdk 2>/dev/null)"
         AC_SUBST(LIBDPDK_PC_FILE)
@@ -1385,8 +1391,9 @@
         AC_SUBST(LIBDPDK_LDFLAGS_SHARED)
         LIBDPDK_LDFLAGS_STATIC="$(pkg-config --static --libs libdpdk)"
         AC_SUBST(LIBDPDK_LDFLAGS_STATIC)
+
     ])
-    AM_CONDITIONAL([BUILD_DPDK], [test "x$DPDK_PKG_CONFIG_VAR" = x0])
+    AM_CONDITIONAL([BUILD_DPDK_APPS], [test "x$DPDK_PKG_CONFIG_VAR" = x0])
 
   # Netmap support
     AC_ARG_ENABLE(netmap,
@@ -2596,6 +2603,7 @@ SURICATA_BUILD_CONF="Suricata Configuration:
   Profiling locks enabled:                 ${enable_profiling_locks}
 
   Plugin support (experimental):           ${plugin_support}
+  DPDK apps (experimental):                ${enable_dpdk_apps}
 
 Development settings:
   Coccinelle / spatch:                     ${enable_coccinelle}

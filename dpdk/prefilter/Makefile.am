@@ -1,9 +1,9 @@
-EXTRA_DIST = prefilter.c util-prefilter.c logger.c logger-basic.c dev-conf.c dev-conf-suricata.c lcores-manager.c \
+# EXTRA_DIST = prefilter.c util-prefilter.c logger.c logger-basic.c dev-conf.c dev-conf-suricata.c lcores-manager.c \
     lcore-worker.c lcore-worker-suricata.c stats.c \
     prefilter.h util-prefilter.h logger.h logger-basic.h dev-conf.h dev-conf-suricata.h lcores-manager.h \
     lcore-worker.h lcore-worker-suricata.h stats.h
 
-if BUILD_DPDK
+if BUILD_DPDK_APPS
 
 # binary name
 APP = prefilter
@@ -58,8 +58,14 @@ build/$(APP)-shared: $(OBJS)
 build/$(APP)-static: $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS) $(LDFLAGS_STATIC)
 
-build:
-if !BUILD_DPDK
+install-deps:
+	$(MAKE) -C ../../ install
+	$(MAKE) -C ../../ install-headers
+	$(MAKE) -C ../../ install-library
+
+
+build: install-deps
+if !BUILD_DPDK_APPS
 	echo "no installation of DPDK found"
 	exit 1
 endif
