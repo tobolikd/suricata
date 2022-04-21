@@ -54,6 +54,9 @@ typedef struct DPDKPacketVars_ {
     struct rte_ring *tx_ring; // pkt is sent to this ring (same as out_port_*)
 } DPDKPacketVars;
 
+void DevicePostStartPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_name);
+void DevicePreStopPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_name);
+
 void TmModuleReceiveDPDKRegister(void);
 void TmModuleDecodeDPDKRegister(void);
 void DPDKSetTimevalOfMachineStart(void);
