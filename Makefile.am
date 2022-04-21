@@ -65,5 +65,7 @@ install-library:
 install-headers:
 	cd src && $(MAKE) $@
 
-dpdk-apps: install install-headers install-library
+dpdk-apps-prereq: install install-headers install-library
+
+dpdk-apps: dpdk-apps-prereq
 	cd dpdk && $(MAKE) shared

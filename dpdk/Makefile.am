@@ -1,24 +1,16 @@
-TOPTARGETS = shared static check
+TOPTARGETS = shared static check clean
 SUBDIRS = prefilter
 
 if BUILD_DPDK_APPS
 
 help:
 	echo "install Suricata, Suricata headers and library and run make dpdk-apps from root"
-	exit 1
 
 $(TOPTARGETS): $(SUBDIRS)
-
-clean: $(SUBDIRS)
 
 $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
-install:
-
-
-
-
-.PHONY: $(TOPTARGETS) $(SUBDIRS) install install-deps
+.PHONY: $(TOPTARGETS) $(SUBDIRS)
 
 endif

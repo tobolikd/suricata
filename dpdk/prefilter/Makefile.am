@@ -1,8 +1,3 @@
-# EXTRA_DIST = prefilter.c util-prefilter.c logger.c logger-basic.c dev-conf.c dev-conf-suricata.c lcores-manager.c \
-    lcore-worker.c lcore-worker-suricata.c stats.c \
-    prefilter.h util-prefilter.h logger.h logger-basic.h dev-conf.h dev-conf-suricata.h lcores-manager.h \
-    lcore-worker.h lcore-worker-suricata.h stats.h
-
 if BUILD_DPDK_APPS
 
 # binary name
@@ -33,8 +28,16 @@ OBJS = \
     lcore-worker-suricata.o \
     stats.o
 
-all: shared
-.PHONY: shared static
+all: help
+.PHONY: shared static help
+help:
+	@echo "*********** Compiling DPDK apps ***********"
+	@echo "run 'make dpdk-apps-prereq' from root directory"
+	@echo "add Suricata library to ldconfig e.g.: " \
+	"'echo $(CONFIGURE_PREFIX)/lib/ | sudo tee /etc/ld.so.conf.d/dpdk-apps.conf'"
+	@echo "run 'sudo ldconfig'"
+	@echo "run 'make dpdk-apps' from root directory or 'make [shared/static]' from within DPDK app directory"
+	@echo "*********** Compiling DPDK apps ***********"
 shared: build/$(APP)-shared
 	ln -sf $(APP)-shared build/$(APP)
 static: build/$(APP)-static
@@ -43,7 +46,8 @@ static: build/$(APP)-static
 PKGCONF ?= pkg-config
 
 PC_FILE = $(LIBDPDK_PC_FILE)
-CFLAGS += -O3 $(LIBDPDK_CFLAGS) -I $(CONFIGURE_PREFIX)/include/suricata/ -I $(CONFIGURE_PREFIX)/include/ -DHAVE_DPDK -DTLS_C11
+CFLAGS += -O3 $(LIBDPDK_CFLAGS) -I $(CONFIGURE_PREFIX)/include/suricata/ -I $(CONFIGURE_PREFIX)/include/ \
+          -DHAVE_DPDK -DTLS_C11
 LDFLAGS_SHARED = $(LIBDPDK_LDFLAGS_SHARED) -L $(CONFIGURE_PREFIX)/lib/ -lsuricata -lhtp $(LIBS)
 LDFLAGS_STATIC = $(LIBDPDK_LDFLAGS_STATIC)
 
@@ -58,17 +62,8 @@ build/$(APP)-shared: $(OBJS)
 build/$(APP)-static: $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS) $(LDFLAGS_STATIC)
 
-install-deps:
-	$(MAKE) -C ../../ install
-	$(MAKE) -C ../../ install-headers
-	$(MAKE) -C ../../ install-library
 
-
-build: install-deps
-if !BUILD_DPDK_APPS
-	echo "no installation of DPDK found"
-	exit 1
-endif
+build:
 	@mkdir -p $@
 
 .PHONY: clean
