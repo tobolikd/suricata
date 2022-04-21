@@ -28,16 +28,26 @@ OBJS = \
     lcore-worker-suricata.o \
     stats.o
 
-all: help
-.PHONY: shared static help
-help:
-	@echo "*********** Compiling DPDK apps ***********"
-	@echo "run 'make dpdk-apps-prereq' from root directory"
-	@echo "add Suricata library to ldconfig e.g.: " \
-	"'echo $(CONFIGURE_PREFIX)/lib/ | sudo tee /etc/ld.so.conf.d/dpdk-apps.conf'"
-	@echo "run 'sudo ldconfig'"
-	@echo "run 'make dpdk-apps' from root directory or 'make [shared/static]' from within DPDK app directory"
-	@echo "*********** Compiling DPDK apps ***********"
+all:
+	if [ $$test -e $(CONFIGURE_PREFIX)/lib/libsuricata.so ] \
+	&& [ $$test -e $(CONFIGURE_PREFIX)/lib/libhtp.so ] \
+	&& ! [ $(test -n "$(ldconfig -p | grep libsuricata.so)") ]; then \
+		$(MAKE) shared; \
+	else \
+		echo "*********** Compiling DPDK apps ***********"; \
+		echo "1) run from root directory"; \
+		echo "	make dpdk-apps-prereq"; \
+		echo "2) add Suricata library to ldconfig e.g.: "; \
+		echo "	echo $(CONFIGURE_PREFIX)/lib/ | sudo tee /etc/ld.so.conf.d/dpdk-apps.conf"; \
+		echo "3) run:"; \
+		echo "	sudo ldconfig"; \
+		echo "4.a) either run from root directory:"; \
+		echo "	make dpdk-apps"; \
+		echo "4.b) or run from within DPDK app directory:"; \
+		echo "	make [shared/static]"; \
+		echo "*********** Compiling DPDK apps ***********"; \
+	fi
+.PHONY: shared static
 shared: build/$(APP)-shared
 	ln -sf $(APP)-shared build/$(APP)
 static: build/$(APP)-static
