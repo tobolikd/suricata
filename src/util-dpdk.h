@@ -46,8 +46,8 @@
 #define RSS_HKEY_LEN 40
 
 typedef enum {
-    DPDK_ETHDEV_MODE,
-    DPDK_RING_MODE,
+    DPDK_ETHDEV_MODE, // run as DPDK primary process
+    DPDK_RING_MODE,   // run as DPDK secondary process
 } DpdkOperationMode;
 
 typedef enum { DPDK_COPY_MODE_NONE, DPDK_COPY_MODE_TAP, DPDK_COPY_MODE_IPS } DpdkCopyModeEnum;
@@ -70,6 +70,7 @@ typedef struct DPDKIfaceConfig_ {
     /* number of threads - zero means all available */
     int threads;
     /* Ring mode settings */
+    // Holds reference to all rx/tx rings, later assigned to workers
     struct rte_ring **rx_rings;
     struct rte_ring **tx_rings;
     /* End of ring mode settings */
