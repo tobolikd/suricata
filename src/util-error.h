@@ -380,6 +380,7 @@ typedef enum {
     SC_ERR_SIGNAL,
     SC_WARN_CHOWN,
     SC_ERR_HASH_ADD,
+    SC_WARN_BYPASS_EXIST,
 
     SC_ERR_MAX
 } SCError;

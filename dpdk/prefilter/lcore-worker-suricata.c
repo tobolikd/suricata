@@ -269,6 +269,7 @@ static void MessagesHandleNotFoundSingle(struct PFMessage *msg, struct FlowKeyDi
     int ret;
 
     PFMessageErrorFlowNotFoundBypassInit(msg);
+
     FlowKeyReconstruct(&msg->fk, fd);
     ret = rte_ring_enqueue(rslts_ring, (void *)msg);
     if (ret != 0) {
@@ -288,6 +289,7 @@ static void MessagesHandleSoftDeleteSingle(struct PFMessage *msg, struct FlowKey
     FlowKey k_to_del = msg->fk;
 
     PFMessageEvictBypassInit(msg);
+
     FlowKeyReconstruct(&msg->fk, fd);
     msg->bypass_evict_msg.tosrcpktcnt = flow_data->pktstosrc;
     msg->bypass_evict_msg.tosrcbytecnt = flow_data->bytestosrc;
@@ -321,13 +323,47 @@ static void MessagesHandleSoftDeleteSingle(struct PFMessage *msg, struct FlowKey
     }
 }
 
+static void MessagesHandleSoftDeleteSingleOnStatsDump(struct PFMessage *msg, struct FlowKeyDirection *fd,
+        struct BypassHashTableData *flow_data, struct rte_table_hash *bt,
+        struct rte_ring *rslts_ring, struct rte_mempool *msg_mp, struct lcore_stats *stats)
+{
+    int ret;
+    FlowKey k_to_del = msg->fk;
+
+    PFMessageForceEvictBypassInit(msg);
+
+    FlowKeyReconstruct(&msg->fk, fd);
+    msg->bypass_force_evict_msg.tosrcpktcnt = flow_data->pktstosrc;
+    msg->bypass_force_evict_msg.tosrcbytecnt = flow_data->bytestosrc;
+    msg->bypass_force_evict_msg.todstpktcnt = flow_data->pktstodst;
+    msg->bypass_force_evict_msg.todstbytecnt = flow_data->bytestodst;
+
+
+    ret = rte_ring_enqueue(rslts_ring, (void *)msg);
+    if (ret != 0) {
+        stats->msgs_mempool_put++;
+        stats->msgs_enq_fail++;
+        rte_mempool_put(msg_mp, msg);
+    } else {
+        stats->msgs_type_tx[PF_MESSAGE_BYPASS_FORCE_EVICT]++;
+        int key_found;
+        BypassHashTableDelete(bt, &k_to_del, &key_found, NULL);
+        if (key_found) {
+            stats->flow_bypass_del_success++;
+            Log().debug("Flow deleted on dump of the bypass table");
+        } else {
+            stats->flow_bypass_del_fail++;
+            Log().debug("Attempt to delete flow record failed on bypass table dump");
+        }
+    }
+}
+
 static void MessagesCheckSingle(struct lcore_values *lv)
 {
     struct PFMessage *msgs[BURST_SIZE];
     uint32_t msgs_cnt;
     FlowKey *msgs_flow_keys[sizeof(msgs) / sizeof(msgs[0])];
     struct FlowKeyDirection msgs_flow_dirs[sizeof(msgs) / sizeof(msgs[0])];
-    uint64_t msgs_lookup_hitmask = 0;
     struct BypassHashTableData *flow_data[sizeof(msgs) / sizeof(msgs[0])];
 
     msgs_cnt = rte_ring_dequeue_burst(lv->tasks_ring, (void **)msgs, BURST_SIZE, NULL);
@@ -344,14 +380,14 @@ static void MessagesCheckSingle(struct lcore_values *lv)
             (void **)flow_data);
     */
 
-    uint32_t flow_found;
+    uint64_t flow_found;
     for (uint32_t i = 0; i < msgs_cnt; i++) {
         msgs_flow_dirs[i] = FlowKeyUnify(&msgs[i]->fk);
         msgs_flow_keys[i] = &msgs[i]->fk;
-        BypassHashTableLookup(lv->bt, (const void **)&msgs_flow_keys[i], 1, &msgs_lookup_hitmask,
+        flow_found = 0;
+        BypassHashTableLookup(lv->bt, (const void **)&msgs_flow_keys[i], 1, &flow_found,
                 (void **)flow_data);
 
-        flow_found = msgs_lookup_hitmask & (1 << i);
         if (msgs[i]->msg_type == PF_MESSAGE_BYPASS_ADD) {
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_ADD]++;
             if (!flow_found) {
@@ -368,9 +404,9 @@ static void MessagesCheckSingle(struct lcore_values *lv)
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_SOFT_DELETE]++;
             if (flow_found) {
                 Log().debug("Flow updating - todst B %lu todst pkts %lu tosrc B %lu tosrc pkts %lu",
-                        flow_data[i]->bytestodst, flow_data[i]->pktstodst, flow_data[i]->bytestosrc,
-                        flow_data[i]->pktstosrc);
-                MessagesHandleSoftDeleteSingle(msgs[i], &msgs_flow_dirs[i], flow_data[i], lv->bt,
+                        flow_data[0]->bytestodst, flow_data[0]->pktstodst, flow_data[0]->bytestosrc,
+                        flow_data[0]->pktstosrc);
+                MessagesHandleSoftDeleteSingle(msgs[i], &msgs_flow_dirs[i], flow_data[0], lv->bt,
                         lv->results_ring, lv->message_mp, &lv->stats);
             } else {
                 MessagesHandleNotFoundSingle(
@@ -498,9 +534,8 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
     }
 
     lv->state = init_vals->state;
-    LcoreStateSet(lv->state, LCORE_INIT_DONE);
     lv->bt = init_vals->bypass_table;
-
+    memset(&lv->stats, 0, sizeof(lv->stats)); // just to be sure - null the stats
     return lv;
 }
 
@@ -883,17 +918,10 @@ static void PktsDeqAndTx(struct lcore_values *lv)
 
 void ThreadSuricataRun(struct lcore_values *lv)
 {
-    memset(&lv->stats, 0, sizeof(lv->stats)); // null the stats
-
     Log().notice("Lcore %u receiving from %s (p%d)", lv->qid, lv->port1_addr, lv->port1_id);
     if (lv->opmode != IDS)
         Log().notice("Lcore %u receiving from %s (p%d)", lv->qid, lv->port2_addr, lv->port2_id);
 
-    while (!LcoreStateCheck(lv->state, LCORE_RUN)) {
-        rte_delay_us_sleep(1000);
-        if (LcoreStateCheck(lv->state, LCORE_STOP))
-            return;
-    }
     LcoreStateSet(lv->state, LCORE_RUNNING);
 
     while (!ShouldStop()) {
@@ -906,12 +934,60 @@ void ThreadSuricataRun(struct lcore_values *lv)
 
         MessagesCheckSingle(lv);
     }
-
-    // not sure if needed
-    LcoreStateSet(lv->state, LCORE_RUNNING_DONE);
 }
 
-void ThreadSuricataExitStats(struct lcore_values *lv)
+void ThreadSuricataStatsDump(struct lcore_values *lv)
+{
+
+    struct PFMessage *msgs[BURST_SIZE];
+    uint32_t msgs_cnt;
+    FlowKey *msgs_flow_keys[sizeof(msgs) / sizeof(msgs[0])];
+    struct FlowKeyDirection msgs_flow_dirs[sizeof(msgs) / sizeof(msgs[0])];
+    uint64_t msgs_lookup_hitmask = 0;
+    struct BypassHashTableData *flow_data[sizeof(msgs) / sizeof(msgs[0])];
+
+
+    while (LcoreStateCheck(lv->state, LCORE_STAT_DUMP)) {
+        msgs_cnt = rte_ring_dequeue_burst(lv->tasks_ring, (void **)msgs, BURST_SIZE, NULL);
+        lv->stats.msgs_deq += msgs_cnt;
+
+        uint32_t flow_found;
+        for (uint32_t i = 0; i < msgs_cnt; i++) {
+            msgs_flow_dirs[i] = FlowKeyUnify(&msgs[i]->fk);
+            msgs_flow_keys[i] = &msgs[i]->fk;
+            msgs_lookup_hitmask = 0;
+            BypassHashTableLookup(lv->bt, (const void **)&msgs_flow_keys[i], 1, &msgs_lookup_hitmask,
+                    (void **)flow_data);
+
+            flow_found = msgs_lookup_hitmask;
+            if (msgs[i]->msg_type == PF_MESSAGE_BYPASS_SOFT_DELETE) {
+                // todo: maybe introduce new message type - bypass_dump_delete
+                lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_SOFT_DELETE]++;
+                Log().debug("Flow dumping - flow %s val 0x%x", msgs_lookup_hitmask != 0 ? "found" : "not found", msgs_lookup_hitmask);
+
+                if (msgs_lookup_hitmask) {
+                    Log().debug("Flow dumping - todst B %lu todst pkts %lu tosrc B %lu tosrc pkts %lu",
+                            flow_data[0]->bytestodst, flow_data[0]->pktstodst, flow_data[0]->bytestosrc,
+                            flow_data[0]->pktstosrc);
+                    MessagesHandleSoftDeleteSingleOnStatsDump(msgs[i], &msgs_flow_dirs[i],
+                            flow_data[0], lv->bt, lv->results_ring, lv->message_mp, &lv->stats);
+                } else {
+                    MessagesHandleNotFoundSingle(
+                            msgs[i], &msgs_flow_dirs[i], lv->results_ring, lv->message_mp, &lv->stats);
+                    Log().debug("Flow not found, unable to get stats");
+                }
+            } else {
+                Log().error(EINVAL, "Unknown message");
+                lv->stats.msgs_mempool_put++;
+                rte_mempool_put(lv->message_mp, (void *)msgs[i]);
+            }
+        }
+
+
+    }
+}
+
+void ThreadSuricataStatsExit(struct lcore_values *lv, struct pf_stats *stats)
 {
     Log().info("Lcore %d PORT 1 rx: %lu tx all: %lu tx success: %lu", rte_lcore_id(),
             lv->stats.pkts_p1_rx, lv->stats.pkts_p1_tx_total, lv->stats.pkts_p1_tx_success);
@@ -935,7 +1011,8 @@ void ThreadSuricataExitStats(struct lcore_values *lv)
         msgs_enq_total += lv->stats.msgs_type_tx[i];
     }
     Log().info("Lcore %d MSGS: received %lu sent %lu failed msg enqueues %lu mempool putbacks %lu "
-               "adds %lu soft deletes %lu evicts %lu updates %lu not found %lu",
+               "adds %lu soft deletes %lu evicts %lu forced evicts (dumps) %lu updates %lu "
+               "not found %lu",
             rte_lcore_id(), lv->stats.msgs_deq, msgs_enq_total, lv->stats.msgs_enq_fail,
             lv->stats.msgs_mempool_put,
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_ADD] +
@@ -944,6 +1021,8 @@ void ThreadSuricataExitStats(struct lcore_values *lv)
                     lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_SOFT_DELETE],
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_EVICT] +
                     lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_EVICT],
+            lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_FORCE_EVICT] +
+                    lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_FORCE_EVICT],
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_UPDATE] +
                     lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_UPDATE],
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_FLOW_NOT_FOUND] +
@@ -954,6 +1033,29 @@ void ThreadSuricataExitStats(struct lcore_values *lv)
             rte_lcore_id(), lv->stats.flow_bypass_success, lv->stats.flow_bypass_update,
             lv->stats.flow_bypass_del_success, lv->stats.flow_bypass_exists,
             lv->stats.flow_bypass_del_fail);
+
+    rte_atomic64_add(&stats->p1_rx, (int64_t)lv->stats.pkts_p1_rx);
+    rte_atomic64_add(&stats->p1_tx, (int64_t)lv->stats.pkts_p1_tx_success);
+    rte_atomic64_add(&stats->p1_tx_all, (int64_t)lv->stats.pkts_p1_tx_total);
+    rte_atomic64_add(&stats->p2_rx, (int64_t)lv->stats.pkts_p2_rx);
+    rte_atomic64_add(&stats->p2_tx, (int64_t)lv->stats.pkts_p2_tx_success);
+    rte_atomic64_add(&stats->p2_tx_all, (int64_t)lv->stats.pkts_p2_tx_total);
+
+    rte_atomic64_add(&stats->pkts_enqueue_tries, (int64_t)enq_total);
+    rte_atomic64_add(&stats->pkts_enqueues, (int64_t)enq_success);
+    rte_atomic64_add(&stats->pkts_dequeues, (int64_t)deq_success);
+
+    rte_atomic64_add(&stats->pkts_inspects, (int64_t)lv->stats.pkts_inspected);
+    rte_atomic64_add(&stats->pkts_bypasses, (int64_t)lv->stats.pkts_bypassed);
+
+    rte_atomic64_add(&stats->msgs_rx, (int64_t)lv->stats.msgs_deq);
+    rte_atomic64_add(&stats->msgs_tx, (int64_t)msgs_enq_total);
+
+    rte_atomic64_add(&stats->flow_bypasses, (int64_t)lv->stats.flow_bypass_success);
+    rte_atomic64_add(&stats->flow_bypass_updates, (int64_t)lv->stats.flow_bypass_update);
+    rte_atomic64_add(&stats->flow_bypass_dels, (int64_t)lv->stats.flow_bypass_del_success);
+    rte_atomic64_add(&stats->msgs_tx_fail, (int64_t)lv->stats.msgs_enq_fail);
+    rte_atomic64_add(&stats->msgs_mp_puts, (int64_t)lv->stats.msgs_mempool_put);
 }
 
 void ThreadSuricataDeinit(struct lcore_init *vals, struct lcore_values *lv)

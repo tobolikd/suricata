@@ -177,6 +177,7 @@
 #include "util-dpdk.h"
 
 #include "rust.h"
+#include "util-dpdk-bypass.h"
 
 /*
  * we put this here, because we only use it here in main.
@@ -2945,8 +2946,18 @@ int SuricataMain(int argc, char **argv)
 
     PostRunStartedDetectSetup(&suricata);
 
+    DpdkIpcRegisterActions();
+    DpdkIpcStart();
+
     SCPledge();
     SuricataMainLoop(&suricata);
+
+    if (sigterm_count || sigint_count) {
+        // don't issue stop command unless user signalled
+        // (e.g. Suricata received shutdown command)
+        DpdkIpcStop();
+    }
+    DpdkIpcDumpStats();
 
     /* Update the engine stage/status flag */
     SC_ATOMIC_SET(engine_stage, SURICATA_DEINIT);
@@ -2955,6 +2966,7 @@ int SuricataMain(int argc, char **argv)
     PostRunDeinit(suricata.run_mode, &suricata.start_time);
     /* kill remaining threads */
     TmThreadKillThreads();
+    DpdkIpcDetach();
 
 out:
     GlobalsDestroy(&suricata);

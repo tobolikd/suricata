@@ -28,7 +28,31 @@
 #include "util-dpdk.h"
 #include "flow-bypass.h"
 
+extern int32_t ipc_app_id;
+
+void DpdkIpcRegisterActions(void);
+
+void DpdkIpcStart(void);
+void DpdkIpcStop(void);
+void DpdkIpcDumpStats(void);
+void DpdkIpcDetach(void);
+
 #ifdef HAVE_DPDK
+
+#define IPC_VALID_RESPONSE "ok"
+
+#define IPC_ACTION_ATTACH "attach"
+#define IPC_ACTION_DETACH "detach"
+#define IPC_ACTION_START "pkts_start"
+#define IPC_ACTION_STOP "pkts_stop"
+#define IPC_ACTION_SHUTDOWN "shutdown"
+#define IPC_ACTION_BYPASS_TBL_DUMP_START "bt_dump_start"
+#define IPC_ACTION_BYPASS_TBL_DUMP_STOP "bt_dump_stop"
+
+struct IPCResponseAttach {
+    uint32_t app_id;
+    char memzone_name[RTE_MEMZONE_NAMESIZE];
+};
 
 struct PFMessage {
     enum PFMessageType msg_type;
@@ -53,6 +77,12 @@ struct PFMessage {
             uint64_t tosrcbytecnt;
             uint64_t todstpktcnt;
             uint64_t todstbytecnt;
+        } bypass_force_evict_msg;
+        struct {
+            uint64_t tosrcpktcnt;
+            uint64_t tosrcbytecnt;
+            uint64_t todstpktcnt;
+            uint64_t todstbytecnt;
         } update_msg;
     };
 };
@@ -72,6 +102,7 @@ typedef struct FlowKeyExtended {
 
 void PFMessageAddBypassInit(struct PFMessage *msg);
 void PFMessageDeleteBypassInit(struct PFMessage *msg);
+void PFMessageForceEvictBypassInit(struct PFMessage *msg);
 void PFMessageEvictBypassInit(struct PFMessage *msg);
 void PFMessageErrorFlowNotFoundBypassInit(struct PFMessage *msg);
 
