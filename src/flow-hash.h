@@ -26,6 +26,7 @@
 
 /** Spinlocks or Mutex for the flow buckets. */
 //#define FBLOCK_SPIN
+#include "flow-storage.h"
 #define FBLOCK_MUTEX
 
 #ifdef FBLOCK_SPIN
@@ -88,6 +89,19 @@ uint32_t FlowKeyGetHash(FlowKey *flow_key);
 /** \note f->fb must be locked */
 static inline void RemoveFromHash(Flow *f, Flow *prev_f)
 {
+    FlowBypassInfo *fc = FlowGetStorageById(f, GetFlowBypassInfoID());
+    if (fc != NULL && fc->bypass_data != NULL) {
+        SCLogWarning(SC_WARN_BYPASS_EXIST, "Removing flow while bypass still exists");
+        if (fc->BypassFree != NULL) {
+            fc->BypassFree(fc->bypass_data);
+            fc->bypass_data = NULL;
+            fc->BypassFree = NULL;
+        }
+        FlowFreeStorageById(f, GetFlowBypassInfoID());
+        // release the bypass data, release the bypass info
+        // send force delete to prefilter
+    }
+
     FlowBucket *fb = f->fb;
 
     /* remove from the hash */
