@@ -184,6 +184,8 @@ static void MessagesHandleSoftDeleteBulk(struct lcore_values *lv, struct PFMessa
 // handles incoming messages in bulks but there can be problems with the operation order
 // where e.g. all add operations are done first and then all delete operations are done
 // You can either accept this or implement protection for operation order.
+
+// not updated for hard delete - maybe just delete that?
 static void MessagesCheckBulk(struct lcore_values *lv)
 {
     struct PFMessage *msgs[BURST_SIZE];
@@ -412,6 +414,19 @@ static void MessagesCheckSingle(struct lcore_values *lv)
                 MessagesHandleNotFoundSingle(
                         msgs[i], &msgs_flow_dirs[i], lv->results_ring, lv->message_mp, &lv->stats);
                 Log().debug("Flow not found, unable to get stats");
+            }
+        } else if (msgs[i]->msg_type == PF_MESSAGE_BYPASS_HARD_DELETE) {
+            lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_HARD_DELETE]++;
+            if (flow_found) {
+                int32_t flow_del = 0;
+                BypassHashTableDelete(lv->bt, msgs_flow_keys[i], &flow_del, NULL);
+                if (flow_del) {
+                    lv->stats.flow_bypass_del_success++;
+                    Log().debug("Timed out flow record deleted from flow table");
+                } else {
+                    lv->stats.flow_bypass_del_fail++;
+                    Log().debug("Attempt to delete timed out flow record failed");
+                }
             }
         } else {
             Log().error(EINVAL, "Unknown message");
@@ -976,6 +991,20 @@ void ThreadSuricataStatsDump(struct lcore_values *lv)
                             msgs[i], &msgs_flow_dirs[i], lv->results_ring, lv->message_mp, &lv->stats);
                     Log().debug("Flow not found, unable to get stats");
                 }
+            } else if (msgs[i]->msg_type == PF_MESSAGE_BYPASS_HARD_DELETE) {
+                lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_HARD_DELETE]++;
+                if (flow_found) {
+                    Log().info("deleting hard delete flow on dump");
+                    BypassHashTableDelete(lv->bt, &msgs_flow_keys[i], (int32_t *)&flow_found, NULL);
+                    if (flow_found) {
+                        lv->stats.flow_bypass_del_success++;
+                        Log().info("hard delete flow succ on dump");
+                        Log().debug("Timed out flow record deleted from flow table");
+                    } else {
+                        lv->stats.flow_bypass_del_fail++;
+                        Log().debug("Attempt to delete timed out flow record failed");
+                    }
+                }
             } else {
                 Log().error(EINVAL, "Unknown message");
                 lv->stats.msgs_mempool_put++;
@@ -1011,7 +1040,7 @@ void ThreadSuricataStatsExit(struct lcore_values *lv, struct pf_stats *stats)
         msgs_enq_total += lv->stats.msgs_type_tx[i];
     }
     Log().info("Lcore %d MSGS: received %lu sent %lu failed msg enqueues %lu mempool putbacks %lu "
-               "adds %lu soft deletes %lu evicts %lu forced evicts (dumps) %lu updates %lu "
+               "adds %lu soft deletes %lu hard deletes %lu evicts %lu forced evicts (dumps) %lu updates %lu "
                "not found %lu",
             rte_lcore_id(), lv->stats.msgs_deq, msgs_enq_total, lv->stats.msgs_enq_fail,
             lv->stats.msgs_mempool_put,
@@ -1019,6 +1048,8 @@ void ThreadSuricataStatsExit(struct lcore_values *lv, struct pf_stats *stats)
                     lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_ADD],
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_SOFT_DELETE] +
                     lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_SOFT_DELETE],
+            lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_HARD_DELETE] +
+                    lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_HARD_DELETE],
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_EVICT] +
                     lv->stats.msgs_type_tx[PF_MESSAGE_BYPASS_EVICT],
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_FORCE_EVICT] +

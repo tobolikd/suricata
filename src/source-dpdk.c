@@ -378,41 +378,19 @@ static void DPDKReleasePacket(Packet *p)
     PacketFreeOrRelease(p);
 }
 
-// todo: change function prototype to also pass FlowManagerThreadVars or at least part of it
-static bool DPDKBypassUpdate(Flow *f, void *data, time_t tsec, void *mpc)
+static void DPDKBypassHardDelete(Flow *f, struct DPDKFlowBypassData *d)
 {
-    struct PFMessage *msg = NULL;
     int ret;
-    struct DPDKFlowBypassData *d = (struct DPDKFlowBypassData *)data;
-    int64_t msg_pressure_timeout;
+    struct PFMessage *msg = NULL;
 
-    if (mpc == NULL) {
-        SCLogWarning(SC_ERR_DPDK_BYPASS, "No mempool cache initialized");
-    }
-
-    FlowBypassInfo *fc = FlowGetStorageById(f, GetFlowBypassInfoID());
-    if (fc == NULL) {
-        return false;
-    }
-
-    msg_pressure_timeout = f->timeout_policy * (1 + d->pending_msgs) * d->pending_msgs / 2;
-    SCLogDebug("cur time %ld next upd %ld f lastts %ld pending calls %d timeout policy %d", tsec,
-            f->lastts.tv_sec + msg_pressure_timeout, f->lastts.tv_sec, d->pending_msgs,
-            f->timeout_policy);
-    if (tsec < f->lastts.tv_sec + msg_pressure_timeout) {
-        // Suri couldn't send message, the message channel is overloaded
-        d->pending_msgs = d->pending_msgs > 0 ? d->pending_msgs - 1 : 0;
-        return true;
-    }
-
-    ret = rte_mempool_generic_get(d->msg_mp, (void **)&msg, 1, mpc);
+    ret = rte_mempool_generic_get(d->msg_mp, (void **)&msg, 1, NULL);
     if (ret != 0) {
         rte_mempool_dump(stdout, d->msg_mp);
         SCLogWarning(
                 SC_ERR_DPDK_BYPASS, "Error (%s): Unable to get message object", rte_strerror(-ret));
-        return true;
+        return;
     }
-    PFMessageDeleteBypassInit(msg);
+    PFMessageHardDeleteBypassInit(msg);
     ret = FlowKeyInitFromFlow(&msg->fk, f);
     if (ret != 0) {
         SCLogWarning(SC_ERR_DPDK_BYPASS, "Error (%s): Unable to init FlowKey structure from Flow",
@@ -450,13 +428,108 @@ static bool DPDKBypassUpdate(Flow *f, void *data, time_t tsec, void *mpc)
                 msg->fk.vlan_id[0]);
     }
 
-    return true;
+cleanup:
+    if (msg != NULL) {
+        rte_mempool_generic_put(d->msg_mp, (void **)&msg, 1, NULL);
+    }
+}
+
+static void DPDKBypassSoftDelete(
+        Flow *f, struct DPDKFlowBypassData *d, time_t tsec, struct rte_mempool_cache *mpc)
+{
+    int ret;
+    struct PFMessage *msg = NULL;
+    int64_t msg_pressure_timeout;
+
+    msg_pressure_timeout = f->timeout_policy * (1 + d->pending_msgs) * d->pending_msgs / 2;
+    SCLogDebug("cur time %ld next upd %ld f lastts %ld pending calls %d timeout policy %d",
+            tsec, f->lastts.tv_sec + msg_pressure_timeout, f->lastts.tv_sec, d->pending_msgs,
+            f->timeout_policy);
+    if (tsec < f->lastts.tv_sec + msg_pressure_timeout) {
+        // Suri couldn't send message, the message channel is overloaded
+        d->pending_msgs = d->pending_msgs > 0 ? d->pending_msgs - 1 : 0;
+        return;
+    }
+
+    ret = rte_mempool_generic_get(d->msg_mp, (void **)&msg, 1, mpc);
+    if (ret != 0) {
+        rte_mempool_dump(stdout, d->msg_mp);
+        SCLogWarning(SC_ERR_DPDK_BYPASS, "Error (%s): Unable to get message object",
+                rte_strerror(-ret));
+        return;
+    }
+    PFMessageDeleteBypassInit(msg);
+    ret = FlowKeyInitFromFlow(&msg->fk, f);
+    if (ret != 0) {
+        SCLogWarning(SC_ERR_DPDK_BYPASS,
+                "Error (%s): Unable to init FlowKey structure from Flow", rte_strerror(-ret));
+        goto cleanup;
+    }
+
+    ret = rte_ring_enqueue(d->tasks_ring, msg);
+    if (ret != 0) {
+        SCLogDebug("Error (%s): Unable to enqueue message object", rte_strerror(-ret));
+        goto cleanup;
+    }
+
+    if (d->pending_msgs < UINT8_MAX)
+        d->pending_msgs++;
+
+    f->flags |= FLOW_LOCK_FOR_WORKERS;
+
+    if (msg->fk.src.family == AF_INET) {
+        SCLogDebug(
+                "Soft Delete bypass msg src ip %u dst ip %u src port %u dst port %u ipproto %u "
+                "outervlan "
+                "%u innervlan %u",
+                msg->fk.src.address.address_un_data32[0],
+                msg->fk.dst.address.address_un_data32[0], msg->fk.sp, msg->fk.dp, msg->fk.proto,
+                msg->fk.vlan_id[0], msg->fk.vlan_id[1]);
+    } else {
+        uint32_t *src_ptr = (uint32_t *)msg->fk.src.address.address_un_data32;
+        uint32_t *dst_ptr = (uint32_t *)msg->fk.dst.address.address_un_data32;
+        (void *)src_ptr; // to avoid unused complains
+        (void *)dst_ptr;
+        SCLogDebug(
+                "Soft Delete bypass msg src ip %u %u %u %u dst ip %u %u %u %u src port %u dst "
+                "port %u ipproto %u outervlan "
+                "%u innervlan %u",
+                src_ptr[0], src_ptr[1], src_ptr[2], src_ptr[3], dst_ptr[0], dst_ptr[1],
+                dst_ptr[2], dst_ptr[3], msg->fk.sp, msg->fk.dp, msg->fk.proto,
+                msg->fk.vlan_id[0], msg->fk.vlan_id[0]);
+    }
+
+    return;
 
 cleanup:
     if (msg != NULL) {
         rte_mempool_generic_put(d->msg_mp, (void **)&msg, 1, mpc);
     }
+}
 
+// todo: change function prototype to also pass FlowManagerThreadVars or at least part of it
+static bool DPDKBypassUpdate(Flow *f, void *data, time_t tsec, void *mpc)
+{
+    struct PFMessage *msg = NULL;
+    int ret;
+    struct DPDKFlowBypassData *d = (struct DPDKFlowBypassData *)data;
+    int64_t msg_pressure_timeout;
+
+    if (mpc == NULL) {
+        SCLogDebug("No mempool cache initialized for DPDK bypass");
+    }
+
+    FlowBypassInfo *fc = FlowGetStorageById(f, GetFlowBypassInfoID());
+    if (fc == NULL) {
+        return false;
+    }
+
+    if (f->flags & FLOW_END_FLAG_STATE_RELEASE_BYPASS) {
+        DPDKBypassHardDelete(f, d);
+        return false;
+    }
+
+    DPDKBypassSoftDelete(f, d, tsec, mpc);
     return true;
 }
 

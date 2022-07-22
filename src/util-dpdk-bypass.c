@@ -268,6 +268,12 @@ void PFMessageAddBypassInit(struct PFMessage *msg)
     msg->next_msg = NULL;
 }
 
+void PFMessageHardDeleteBypassInit(struct PFMessage *msg)
+{
+    msg->msg_type = PF_MESSAGE_BYPASS_HARD_DELETE;
+    msg->next_msg = NULL;
+}
+
 void PFMessageDeleteBypassInit(struct PFMessage *msg)
 {
     msg->msg_type = PF_MESSAGE_BYPASS_SOFT_DELETE;

@@ -102,6 +102,7 @@ typedef struct FlowKeyExtended {
 
 void PFMessageAddBypassInit(struct PFMessage *msg);
 void PFMessageDeleteBypassInit(struct PFMessage *msg);
+void PFMessageHardDeleteBypassInit(struct PFMessage *msg);
 void PFMessageForceEvictBypassInit(struct PFMessage *msg);
 void PFMessageEvictBypassInit(struct PFMessage *msg);
 void PFMessageErrorFlowNotFoundBypassInit(struct PFMessage *msg);
