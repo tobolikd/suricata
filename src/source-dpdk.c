@@ -652,8 +652,8 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
 
     PacketPoolWait();
 
-    SCLogInfo("Task ring name %s, sz %u, capa %u", ptv->rings.tasks_ring->name,
-            ptv->rings.tasks_ring->size, ptv->rings.tasks_ring->capacity);
+//    SCLogInfo("Task ring name %s, sz %u, capa %u", ptv->rings.tasks_ring->name,
+//            ptv->rings.tasks_ring->size, ptv->rings.tasks_ring->capacity);
 
     while (1) {
         if (unlikely(suricata_ctl_flags != 0)) {
@@ -690,7 +690,9 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
             DPDKSetTimevalReal(&ptv->machine_start_time, &p->ts);
             p->dpdk_v.mbuf = ptv->received_mbufs[i];
             p->ReleasePacket = DPDKReleasePacket;
-            p->BypassPacketsFlow = DPDKBypassCallback;
+            if (ptv->op_mode == DPDK_RING_MODE) {
+                p->BypassPacketsFlow = DPDKBypassCallback;
+            }
             p->dpdk_v.copy_mode = ptv->copy_mode;
             p->dpdk_v.out_port_id = ptv->out_port_id;
             p->dpdk_v.out_queue_id = ptv->queue_id;
