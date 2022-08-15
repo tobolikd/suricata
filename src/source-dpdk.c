@@ -451,7 +451,7 @@ static void DPDKBypassSoftDelete(
         return;
     }
 
-    ret = rte_mempool_generic_get(d->msg_mp, (void **)&msg, 1, mpc);
+    ret = rte_mempool_generic_get(d->msg_mp, (void **)&msg, 1, NULL);
     if (ret != 0) {
         rte_mempool_dump(stdout, d->msg_mp);
         SCLogWarning(SC_ERR_DPDK_BYPASS, "Error (%s): Unable to get message object",
@@ -503,7 +503,7 @@ static void DPDKBypassSoftDelete(
 
 cleanup:
     if (msg != NULL) {
-        rte_mempool_generic_put(d->msg_mp, (void **)&msg, 1, mpc);
+        rte_mempool_generic_put(d->msg_mp, (void **)&msg, 1, NULL);
     }
 }
 
@@ -568,7 +568,7 @@ static int DPDKBypassCallback(Packet *p)
         return 0;
     }
 
-    int ret = rte_mempool_get(p->dpdk_v.message_mp, (void **)&msg);
+    int ret = rte_mempool_generic_get(p->dpdk_v.message_mp, (void **)&msg, 1, NULL);
     if (ret != 0) {
         SCLogDebug("Unable to get flow key object from mempool");
         if (PKT_IS_IPV4(p))
@@ -629,7 +629,7 @@ cleanup:
         LiveDevAddBypassFail(p->livedev, 1, AF_INET6);
 
     if (msg != NULL) {
-        rte_mempool_put(p->dpdk_v.message_mp, msg);
+        rte_mempool_generic_put(p->dpdk_v.message_mp, (void **)&msg, 1, NULL);
     }
     return 0;
 }

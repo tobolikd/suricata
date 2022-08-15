@@ -862,7 +862,7 @@ int DPDKCheckBypassMessages(
         }
     }
 
-    rte_mempool_generic_put(dpdk_v->msg_mp, (void **)msg_arr, msg_cnt, dpdk_v->msg_mpc);
+    rte_mempool_generic_put(dpdk_v->msg_mp, (void **)msg_arr, msg_cnt, NULL);
 
     return new_stats;
 }

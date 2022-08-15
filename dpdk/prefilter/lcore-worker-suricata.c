@@ -275,7 +275,7 @@ static void MessagesHandleNotFoundSingle(struct PFMessage *msg, struct FlowKeyDi
     FlowKeyReconstruct(&msg->fk, fd);
     ret = rte_ring_enqueue(rslts_ring, (void *)msg);
     if (ret != 0) {
-        rte_mempool_put(msg_mp, msg);
+        rte_mempool_generic_put(msg_mp, (void **)&msg, 1, NULL);
         stats->msgs_mempool_put++;
         stats->msgs_enq_fail++;
     } else {
@@ -302,7 +302,7 @@ static void MessagesHandleSoftDeleteSingle(struct PFMessage *msg, struct FlowKey
     if (ret != 0) {
         stats->msgs_mempool_put++;
         stats->msgs_enq_fail++;
-        rte_mempool_put(msg_mp, msg);
+        rte_mempool_generic_put(msg_mp, (void **)&msg, 1, NULL);
     } else {
         stats->msgs_type_tx[PF_MESSAGE_BYPASS_EVICT]++;
         if (flow_data->pktstosrc == 0 && flow_data->pktstodst == 0) {
@@ -345,7 +345,7 @@ static void MessagesHandleSoftDeleteSingleOnStatsDump(struct PFMessage *msg, str
     if (ret != 0) {
         stats->msgs_mempool_put++;
         stats->msgs_enq_fail++;
-        rte_mempool_put(msg_mp, msg);
+        rte_mempool_generic_put(msg_mp, (void **)&msg, 1, NULL);
     } else {
         stats->msgs_type_tx[PF_MESSAGE_BYPASS_FORCE_EVICT]++;
         int key_found;
@@ -401,7 +401,7 @@ static void MessagesCheckSingle(struct lcore_values *lv)
                 Log().debug("Flow already bypassed");
             }
             lv->stats.msgs_mempool_put++;
-            rte_mempool_put(lv->message_mp, (void *)msgs[i]);
+            rte_mempool_generic_put(lv->message_mp, (void **)&msgs[i], 1, NULL);
         } else if (msgs[i]->msg_type == PF_MESSAGE_BYPASS_SOFT_DELETE) {
             lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_SOFT_DELETE]++;
             if (flow_found) {
@@ -428,11 +428,11 @@ static void MessagesCheckSingle(struct lcore_values *lv)
                     Log().debug("Attempt to delete timed out flow record failed");
                 }
             }
-            rte_mempool_put(lv->message_mp, (void *)msgs[i]);
+            rte_mempool_generic_put(lv->message_mp, (void **)&msgs[i], 1, NULL);
         } else {
             Log().error(EINVAL, "Unknown message");
             lv->stats.msgs_mempool_put++;
-            rte_mempool_put(lv->message_mp, (void *)msgs[i]);
+            rte_mempool_generic_put(lv->message_mp, (void **)&msgs[i], 1, NULL);
         }
     }
 }
@@ -1028,7 +1028,7 @@ void ThreadSuricataStatsDump(struct lcore_values *lv)
             } else {
                 Log().error(EINVAL, "Unknown message");
                 lv->stats.msgs_mempool_put++;
-                rte_mempool_put(lv->message_mp, (void *)msgs[i]);
+                rte_mempool_generic_put(lv->message_mp, (void **)&msgs[i], 1, NULL);
             }
         }
 
