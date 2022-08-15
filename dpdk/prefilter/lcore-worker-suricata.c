@@ -428,6 +428,7 @@ static void MessagesCheckSingle(struct lcore_values *lv)
                     Log().debug("Attempt to delete timed out flow record failed");
                 }
             }
+            rte_mempool_put(lv->message_mp, (void *)msgs[i]);
         } else {
             Log().error(EINVAL, "Unknown message");
             lv->stats.msgs_mempool_put++;
@@ -1013,17 +1014,17 @@ void ThreadSuricataStatsDump(struct lcore_values *lv)
             } else if (msgs[i]->msg_type == PF_MESSAGE_BYPASS_HARD_DELETE) {
                 lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_HARD_DELETE]++;
                 if (flow_found) {
-                    Log().info("deleting hard delete flow on dump");
+                    Log().debug("deleting hard delete flow on dump");
                     BypassHashTableDelete(lv->bt, &msgs_flow_keys[i], (int32_t *)&flow_found, NULL);
                     if (flow_found) {
                         lv->stats.flow_bypass_del_success++;
-                        Log().info("hard delete flow succ on dump");
-                        Log().debug("Timed out flow record deleted from flow table");
+                        Log().debug("Timed out flow record  hard deleted from flow table");
                     } else {
                         lv->stats.flow_bypass_del_fail++;
                         Log().debug("Attempt to delete timed out flow record failed");
                     }
                 }
+                rte_mempool_generic_put(lv->message_mp, (void **)&msgs[i], 1, NULL);
             } else {
                 Log().error(EINVAL, "Unknown message");
                 lv->stats.msgs_mempool_put++;
