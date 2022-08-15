@@ -378,7 +378,7 @@ static void DPDKReleasePacket(Packet *p)
     PacketFreeOrRelease(p);
 }
 
-static void DPDKBypassHardDelete(Flow *f, struct DPDKFlowBypassData *d)
+static void DPDKBypassHardDelete(Flow *f, struct DPDKFlowBypassData *d, struct rte_mempool_cache *mpc)
 {
     int ret;
     struct PFMessage *msg = NULL;
@@ -410,7 +410,7 @@ static void DPDKBypassHardDelete(Flow *f, struct DPDKFlowBypassData *d)
     f->flags |= FLOW_LOCK_FOR_WORKERS;
 
     if (msg->fk.src.family == AF_INET) {
-        SCLogDebug("Soft Delete bypass msg src ip %u dst ip %u src port %u dst port %u ipproto %u "
+        SCLogDebug("Hard Delete bypass msg src ip %u dst ip %u src port %u dst port %u ipproto %u "
                    "outervlan "
                    "%u innervlan %u",
                 msg->fk.src.address.address_un_data32[0], msg->fk.dst.address.address_un_data32[0],
@@ -420,7 +420,7 @@ static void DPDKBypassHardDelete(Flow *f, struct DPDKFlowBypassData *d)
         uint32_t *dst_ptr = (uint32_t *)msg->fk.dst.address.address_un_data32;
         (void *)src_ptr; // to avoid unused complains
         (void *)dst_ptr;
-        SCLogDebug("Soft Delete bypass msg src ip %u %u %u %u dst ip %u %u %u %u src port %u dst "
+        SCLogDebug("Hard Delete bypass msg src ip %u %u %u %u dst ip %u %u %u %u src port %u dst "
                    "port %u ipproto %u outervlan "
                    "%u innervlan %u",
                 src_ptr[0], src_ptr[1], src_ptr[2], src_ptr[3], dst_ptr[0], dst_ptr[1], dst_ptr[2],
@@ -525,7 +525,7 @@ static bool DPDKBypassUpdate(Flow *f, void *data, time_t tsec, void *mpc)
     }
 
     if (f->flags & FLOW_END_FLAG_STATE_RELEASE_BYPASS) {
-        DPDKBypassHardDelete(f, d);
+        DPDKBypassHardDelete(f, d, mpc);
         return false;
     }
 
