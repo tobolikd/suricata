@@ -829,29 +829,12 @@ static void PktsEnqueue(struct lcore_values *lv)
                 PktsHandleBypassedIDS(
                         &lv->tmp_ring_bufs[i].buf[pkt_count], lv->tmp_ring_bufs[i].len - pkt_count);
             } else if (lv->opmode == IPS) {
-                uint16_t port1_pkts = 0, port2_pkts, pkts_tx;
-                for (uint32_t j = pkt_count; j < lv->tmp_ring_bufs[i].len; j++) {
-                    if (lv->tmp_ring_bufs[i].buf[j]->ol_flags & PKT_ORIGIN_PORT1) {
-                        port1_pkts++;
-                    } else {
-                        break;
-                    }
-                }
-
-                if (port1_pkts > 0) {
-                    pkts_tx = PktsHandleBypassedIPS(&lv->tmp_ring_bufs[i].buf[pkt_count],
-                            port1_pkts, lv->port2_id, lv->qid);
-                    lv->stats.pkts_p2_tx_total += port1_pkts;
-                    lv->stats.pkts_p2_tx_success += pkts_tx;
-                }
-
-                port2_pkts = lv->tmp_ring_bufs[i].len - pkt_count - port1_pkts;
-                if (port2_pkts > 0) {
-                    pkts_tx =
-                            PktsHandleBypassedIPS(&lv->tmp_ring_bufs[i].buf[pkt_count + port1_pkts],
-                                    port2_pkts, lv->port1_id, lv->qid);
-                    lv->stats.pkts_p1_tx_total += port2_pkts;
-                    lv->stats.pkts_p1_tx_success += pkts_tx;
+                for (uint16_t j = pkt_count; j < lv->tmp_ring_bufs[i].len; j++) {
+                    PktsHandleBypassedIPS(
+                            &lv->tmp_ring_bufs[i].buf[j],
+                            1,
+                            lv->tmp_ring_bufs[i].buf[j]->ol_flags & PKT_ORIGIN_PORT1 ? lv->port2_id : lv->port1_id,
+                            lv->qid);
                 }
             }
         }
