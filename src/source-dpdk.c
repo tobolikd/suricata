@@ -428,6 +428,8 @@ static void DPDKBypassHardDelete(Flow *f, struct DPDKFlowBypassData *d, struct r
                 msg->fk.vlan_id[0]);
     }
 
+    return;
+
 cleanup:
     if (msg != NULL) {
         msg->use_cnt--;
