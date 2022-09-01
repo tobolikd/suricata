@@ -430,6 +430,7 @@ static void DPDKBypassHardDelete(Flow *f, struct DPDKFlowBypassData *d, struct r
 
 cleanup:
     if (msg != NULL) {
+        msg->use_cnt--;
         rte_mempool_generic_put(d->msg_mp, (void **)&msg, 1, NULL);
     }
 }
@@ -503,6 +504,7 @@ static void DPDKBypassSoftDelete(
 
 cleanup:
     if (msg != NULL) {
+        msg->use_cnt--;
         rte_mempool_generic_put(d->msg_mp, (void **)&msg, 1, NULL);
     }
 }
@@ -629,6 +631,7 @@ cleanup:
         LiveDevAddBypassFail(p->livedev, 1, AF_INET6);
 
     if (msg != NULL) {
+        msg->use_cnt--;
         rte_mempool_generic_put(p->dpdk_v.message_mp, (void **)&msg, 1, NULL);
     }
     return 0;
