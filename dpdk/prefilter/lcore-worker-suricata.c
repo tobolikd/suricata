@@ -904,7 +904,7 @@ static void PktsDeqAndTx(struct lcore_values *lv)
 
         if (pkt_count2 > BURST_SIZE) {
             lv->stats.pkts_p2_tx_total += pkt_count2;
-            pkt_count = PktsTx(pkts_p2, pkt_count2, lv, lv->port1_id);
+            pkt_count = PktsTx(pkts_p2, pkt_count2, lv, lv->port2_id);
             if (pkt_count < pkt_count2) {
                 rte_pktmbuf_free_bulk(pkts_p2 + pkt_count, pkt_count2 - pkt_count);
             }
@@ -928,7 +928,7 @@ static void PktsDeqAndTx(struct lcore_values *lv)
 
     if (pkt_count2 > 0) {
         lv->stats.pkts_p2_tx_total += pkt_count2;
-        pkt_count = PktsTx(pkts_p2, pkt_count2, lv, lv->port1_id);
+        pkt_count = PktsTx(pkts_p2, pkt_count2, lv, lv->port2_id);
         if (pkt_count < pkt_count2) {
             rte_pktmbuf_free_bulk(pkts_p2 + pkt_count, pkt_count2 - pkt_count);
         }
