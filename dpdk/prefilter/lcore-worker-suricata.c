@@ -651,7 +651,7 @@ static uint16_t MbufsBypassSort(struct rte_mbuf **pkts, uint16_t pkt_cnt,
     return fke_len;
 }
 
-// return number of transmitted packets
+// return number of *transmitted* packets
 static uint32_t PktsHandleBypassed(struct rte_mbuf **pkts, uint16_t pkt_cnt, enum PFOpMode mode,
         const uint16_t *const pid, const uint16_t *const qid)
 {
@@ -737,20 +737,16 @@ static void PktsReceiveIDS(struct lcore_values *lv)
 
 static void PktsReceiveIPS(struct lcore_values *lv)
 {
-    struct rte_mbuf *pkts[2 * BURST_SIZE] = { NULL };
-    struct rte_mbuf *pkts_to_inspect[2 * BURST_SIZE] = { NULL };
-    struct rte_mbuf *pkts_to_bypass[2 * BURST_SIZE] = { NULL };
-    struct BypassHashTableData *bypass_data[2 * BURST_SIZE];
     int ret;
     uint32_t pkt_count1 = 0, pkt_count2 = 0;
     uint16_t pkts_to_bypass_cnt1 = 0, pkts_to_bypass_cnt2 = 0;
     uint16_t pkts_to_inspect_cnt1 = 0, pkts_to_inspect_cnt2 = 0;
     uint64_t bypass_hit_mask = 0;
 
-    pkt_count1 = rte_eth_rx_burst(lv->port1_id, lv->qid, pkts, BURST_SIZE);
+    pkt_count1 = rte_eth_rx_burst(lv->port1_id, lv->qid, lv->pkts, BURST_SIZE);
     // todo: to maximally use the rx array,
     //  the second rx_burst can receive (BURST_SIZE + BURST_SIZE - pkt_count1)
-    pkt_count2 = rte_eth_rx_burst(lv->port2_id, lv->qid, pkts + pkt_count1, BURST_SIZE);
+    pkt_count2 = rte_eth_rx_burst(lv->port2_id, lv->qid, &lv->pkts[pkt_count1], BURST_SIZE);
     if (pkt_count1 <= 0 && pkt_count2 <= 0)
         return;
 
@@ -758,28 +754,28 @@ static void PktsReceiveIPS(struct lcore_values *lv)
     lv->stats.pkts_p2_rx += pkt_count2;
 
     pkts_to_inspect_cnt1 = MbufsBypassSort(
-            pkts, pkt_count1, pkts_to_inspect, lv->fke_arr.fk, lv->fke_arr.fd, lv->tmp_ring_bufs, lv->rings_cnt, true);
+            lv->pkts, pkt_count1, lv->pkts_to_inspect, lv->fke_arr.fk, lv->fke_arr.fd, lv->tmp_ring_bufs, lv->rings_cnt, true);
     pkts_to_inspect_cnt2 =
-            MbufsBypassSort(pkts + pkt_count1, pkt_count2, &pkts_to_inspect[pkts_to_inspect_cnt1],
+            MbufsBypassSort(lv->pkts + pkt_count1, pkt_count2, &lv->pkts_to_inspect[pkts_to_inspect_cnt1],
                     &lv->fke_arr.fk[pkts_to_inspect_cnt1], &lv->fke_arr.fd[pkts_to_inspect_cnt1], lv->tmp_ring_bufs, lv->rings_cnt, false);
     lv->stats.pkts_inspected += pkts_to_inspect_cnt1 + pkts_to_inspect_cnt2;
 
     // todo: optimization -  possibly make looked up keys unique to reduce key set to lookup
     ret = BypassHashTableLookup(lv->bt, (const void **)lv->fk_arr,
-            pkts_to_inspect_cnt1 + pkts_to_inspect_cnt2, &bypass_hit_mask, (void **)bypass_data);
+            pkts_to_inspect_cnt1 + pkts_to_inspect_cnt2, &bypass_hit_mask, (void **)lv->bypass_data);
     lv->stats.pkts_bypassed += ret;
 
-    pkts_to_bypass_cnt1 = PktsBypassSort(pkts_to_inspect, pkts_to_inspect_cnt1, pkts_to_bypass, lv,
-            bypass_hit_mask, bypass_data, lv->fke_arr.fd, true);
-    pkts_to_bypass_cnt2 = PktsBypassSort(&pkts_to_inspect[pkts_to_inspect_cnt1],
-            pkts_to_inspect_cnt2, &pkts_to_bypass[pkts_to_bypass_cnt1], lv,
-            (bypass_hit_mask >> pkts_to_inspect_cnt1), &bypass_data[pkts_to_inspect_cnt1],
+    pkts_to_bypass_cnt1 = PktsBypassSort(lv->pkts_to_inspect, pkts_to_inspect_cnt1, lv->pkts_to_bypass, lv,
+            bypass_hit_mask, lv->bypass_data, lv->fke_arr.fd, true);
+    pkts_to_bypass_cnt2 = PktsBypassSort(&lv->pkts_to_inspect[pkts_to_inspect_cnt1],
+            pkts_to_inspect_cnt2, &lv->pkts_to_bypass[pkts_to_bypass_cnt1], lv,
+            (bypass_hit_mask >> pkts_to_inspect_cnt1), &lv->bypass_data[pkts_to_inspect_cnt1],
             &lv->fke_arr.fd[pkts_to_inspect_cnt1], false);
 
     // packets have been filtered out from the bypassed ones, freeing the byppassed
     if (pkts_to_bypass_cnt1 > 0) {
         pkt_count1 =
-                PktsHandleBypassedIPS(pkts_to_bypass, pkts_to_bypass_cnt1, lv->port2_id, lv->qid);
+                PktsHandleBypassedIPS(lv->pkts_to_bypass, pkts_to_bypass_cnt1, lv->port2_id, lv->qid);
         lv->stats.pkts_p2_tx_total += pkts_to_bypass_cnt1;
         lv->stats.pkts_p2_tx_success += pkt_count1;
         Log().debug("P2: Transmitted or freed %d of %d bypassed packets", pkt_count1,
@@ -788,7 +784,7 @@ static void PktsReceiveIPS(struct lcore_values *lv)
 
     if (pkts_to_bypass_cnt2 > 0) {
         pkt_count2 = PktsHandleBypassedIPS(
-                &pkts_to_bypass[pkts_to_bypass_cnt1], pkts_to_bypass_cnt2, lv->port1_id, lv->qid);
+                &lv->pkts_to_bypass[pkts_to_bypass_cnt1], pkts_to_bypass_cnt2, lv->port1_id, lv->qid);
         lv->stats.pkts_p1_tx_total += pkts_to_bypass_cnt2;
         lv->stats.pkts_p1_tx_success += pkt_count2;
         Log().debug("P1: Transmitted or freed %d of %d bypassed packets", pkt_count2,
