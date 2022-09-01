@@ -2190,6 +2190,9 @@ void PostRunDeinit(const int runmode, struct timeval *start_time)
      * threads and the packet threads */
     FlowDisableFlowManagerThread();
     TmThreadDisableReceiveThreads();
+
+    DpdkIpcDumpStats();
+
     FlowForceReassembly();
     TmThreadDisablePacketThreads();
     SCPrintElapsedTime(start_time);
@@ -2957,7 +2960,6 @@ int SuricataMain(int argc, char **argv)
         // (e.g. Suricata received shutdown command)
         DpdkIpcStop();
     }
-    DpdkIpcDumpStats();
 
     /* Update the engine stage/status flag */
     SC_ATOMIC_SET(engine_stage, SURICATA_DEINIT);
