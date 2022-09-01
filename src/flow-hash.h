@@ -91,7 +91,6 @@ static inline void RemoveFromHash(Flow *f, Flow *prev_f)
 {
     FlowBypassInfo *fc = FlowGetStorageById(f, GetFlowBypassInfoID());
     if (fc != NULL && fc->bypass_data != NULL) {
-        SCLogDebug("Removing flow while bypass still exists");
         if (fc->bypass_data != NULL) {
             f->flags |= FLOW_END_FLAG_STATE_RELEASE_BYPASS;
             fc->BypassUpdate(f, fc->bypass_data, 0, NULL);

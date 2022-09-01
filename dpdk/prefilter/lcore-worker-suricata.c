@@ -847,6 +847,7 @@ static uint16_t PktsTx(
         struct rte_mbuf **pkts, uint16_t pkts_cnt, struct lcore_values *lv, uint16_t port_id)
 {
     uint16_t tx_cnt;
+    Log().debug("Sending %d pkts to P%dQ%d", pkts_cnt, port_id, lv->qid);
     tx_cnt = rte_eth_tx_burst(port_id, lv->qid, pkts, pkts_cnt);
     return tx_cnt;
 }
@@ -982,7 +983,6 @@ void ThreadSuricataStatsDump(struct lcore_values *lv)
 
             flow_found = msgs_lookup_hitmask;
             if (msgs[i]->msg_type == PF_MESSAGE_BYPASS_SOFT_DELETE) {
-                // todo: maybe introduce new message type - bypass_dump_delete
                 lv->stats.msgs_type_rx[PF_MESSAGE_BYPASS_SOFT_DELETE]++;
                 Log().debug("Flow dumping - flow %s val 0x%x", msgs_lookup_hitmask != 0 ? "found" : "not found", msgs_lookup_hitmask);
 
