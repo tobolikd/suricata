@@ -154,6 +154,23 @@ DPDKIfaceConfigAttributes dpdk_yaml = {
     .copy_iface = "copy-iface",
 };
 
+char mz_name[RTE_MEMZONE_NAMESIZE] = {0};
+
+static int SharedConfNameIsSet()
+{
+    return strnlen(mz_name, sizeof(mz_name)) > 0 ? 1 : 0;
+}
+
+static void SharedConfSetName(const char *mz_name_new)
+{
+    strlcpy(mz_name, mz_name_new, sizeof(mz_name));
+}
+
+static const char *SharedConfGetName()
+{
+    return mz_name;
+}
+
 static int GreatestDivisorUpTo(uint32_t num, uint32_t max_num)
 {
     for (int i = max_num; i >= 2; i--) {
@@ -1552,13 +1569,13 @@ static bool DeviceRingNameIsValid(const char *name, uint16_t rings_cnt)
     return true;
 }
 
-static struct PFConfRingEntry *DeviceRingsFindPFConfRingEntry(const char *mz_name, const char *rx_ring_name)
+static struct PFConfRingEntry *DeviceRingsFindPFConfRingEntry(const char *memzone_name, const char *rx_ring_name)
 {
     const struct rte_memzone *mz = NULL;
     struct PFConf *pf_conf;
     struct PFConfRingEntry *pf_re;
 
-    mz = rte_memzone_lookup(mz_name);
+    mz = rte_memzone_lookup(memzone_name);
     if (mz == NULL) {
         FatalError("Error (%s): Memzone not found", rte_strerror(rte_errno));
     }
@@ -1578,7 +1595,6 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
     uint16_t rings_cnt = iconf->threads;
     struct PFConfRingEntry *pf_re;
     int retval;
-    char mz_name[RTE_MEMZONE_NAMESIZE];
 
     if (!DeviceRingNameIsValid(iconf->iface, rings_cnt))
         SCReturnInt(-EINVAL);
@@ -1587,19 +1603,9 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
             SCReturnInt(-EINVAL);
     }
 
-    struct rte_mp_msg req;
-    struct rte_mp_reply reply;
-    memset(&req, 0, sizeof(req));
-    strlcpy(req.name, IPC_ACTION_ATTACH, RTE_MP_MAX_NAME_LEN);
-    const struct timespec ts = {.tv_sec = 1, .tv_nsec = 0};
-    retval = rte_mp_request_sync(&req, &reply, &ts);
-    if (retval != 0 || reply.nb_sent != reply.nb_received) {
-        FatalError("Attach req-response failed (%s)", rte_strerror(rte_errno));
+    if (!SharedConfNameIsSet()) {
+        FatalError("Suricata shared config not set!");
     }
-    struct IPCResponseAttach *a = (struct IPCResponseAttach *)reply.msgs[0].param;
-
-    strlcpy(mz_name, a->memzone_name, sizeof(mz_name));
-    ipc_app_id = (int32_t)a->app_id;
 
     // if fail occurs, these are freed in DPDKDerefConfig
     iconf->rx_rings = SCCalloc(rings_cnt, sizeof(struct rte_ring *));
@@ -1642,7 +1648,7 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
             SCReturnInt(-ENOENT);
         }
 
-        pf_re = DeviceRingsFindPFConfRingEntry(mz_name, name);
+        pf_re = DeviceRingsFindPFConfRingEntry(SharedConfGetName(), name);
         if (pf_re == NULL) {
             SCLogError("cannot get prefilter ring entry'%s'", name);
             SCReturnInt(-ENOENT);
@@ -1988,6 +1994,21 @@ int RunModeIdsDpdkWorkers(void)
     TimeModeSetLive();
 
     InitEal();
+
+    if (rte_eal_process_type() == RTE_PROC_SECONDARY) {
+        struct rte_mp_msg req;
+        struct rte_mp_reply reply;
+        memset(&req, 0, sizeof(req));
+        strlcpy(req.name, IPC_ACTION_ATTACH, RTE_MP_MAX_NAME_LEN);
+        const struct timespec ts = {.tv_sec = 1, .tv_nsec = 0};
+        ret = rte_mp_request_sync(&req, &reply, &ts);
+        if (ret != 0 || reply.nb_sent != reply.nb_received) {
+            FatalError("Attach req-response failed (%s)", rte_strerror(rte_errno));
+        }
+        struct IPCResponseAttach *a = (struct IPCResponseAttach *)reply.msgs[0].param;
+        SharedConfSetName(a->memzone_name);
+        ipc_app_id = (int32_t)a->app_id;
+    }
     ret = RunModeSetLiveCaptureWorkers(ParseDpdkConfigAndConfigureDevice, DPDKConfigGetThreadsCount,
             "ReceiveDPDK", "DecodeDPDK", thread_name_workers, NULL);
     if (ret != 0) {
