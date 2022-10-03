@@ -476,6 +476,10 @@ static void DPDKDerefConfig(void *conf)
             SCFree(iconf->messages_mempools);
         }
 
+        if (iconf->cntOfldsFromPf != NULL) {
+            SCFree(iconf->cntOfldsFromPf);
+        }
+
         SCFree(iconf);
     }
     SCReturn;
@@ -1424,6 +1428,17 @@ static struct PFConfRingEntry *DeviceRingsFindPFConfRingEntry(const char *memzon
     return NULL;
 }
 
+void setOffloads(uint16_t finalOffloads, uint16_t* cntOffloads, uint16_t* indexOffloads)
+{
+    // TODO create a constant variable '16'
+    for (int i = 0; i < 16; i++) {
+        if (((1 << i) & finalOffloads) != 0) {
+            indexOffloads[*cntOffloads] = i;
+            (*cntOffloads)++;
+        }
+    }
+}
+
 static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
 {
     SCEnter();
@@ -1473,6 +1488,13 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
         SCReturnInt(-ENOMEM);
     }
 
+    iconf->cntOfldsFromPf = SCCalloc(rings_cnt, sizeof(uint16_t));
+    if (iconf->cntOfldsFromPf == NULL) {
+        SCLogError(SC_ERR_DPDK_INIT, "Failed to calloc cntOfldsFromPf");
+        SCReturnInt(-ENOMEM);
+    }
+
+
     for (int32_t i = 0; i < rings_cnt; ++i) {
         const char *name;
         name = DeviceRingNameInit(iconf->iface, i);
@@ -1492,6 +1514,8 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
         iconf->results_rings[i] = pf_re->results_ring;
         iconf->messages_mempools[i] = pf_re->message_mp;
 
+        pf_re->ofldsSurWant = iconf->ofldsSurWant;
+
         if (iconf->copy_mode == DPDK_COPY_MODE_NONE) {
             iconf->tx_rings[i] = NULL;
         } else {
@@ -1503,6 +1527,34 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
                 SCReturnInt(-ENOENT);
             }
         }
+    }
+
+    // TODO upgrade it
+    struct rte_mp_msg req;
+    struct rte_mp_reply reply;
+    memset(&req, 0, sizeof(req));
+    strlcpy(req.name, IPC_ACTION_SET_UP_OFFLOADS, RTE_MP_MAX_NAME_LEN);
+    const struct timespec tss = {.tv_sec = 3, .tv_nsec = 0};
+    retval = rte_mp_request_sync(&req, &reply, &tss);
+
+    for (int32_t i = 0; i < rings_cnt; ++i) {
+        const char *name;
+        name = DeviceRingNameInit(iconf->iface, i);
+        SCLogDebug("Looking up rx ring: %s", name);
+        iconf->rx_rings[i] = rte_ring_lookup(name);
+        if (iconf->rx_rings[i] == NULL) {
+            SCLogError(SC_ERR_DPDK_INIT, "rte_ring_lookup(): cannot get rx ring '%s'", name);
+            SCReturnInt(-ENOENT);
+        }
+
+        pf_re = DeviceRingsFindPFConfRingEntry(mz_name, name);
+        if (pf_re == NULL) {
+            SCLogError(SC_ERR_DPDK_INIT, "cannot get prefilter ring entry'%s'", name);
+            SCReturnInt(-ENOENT);
+        }
+
+        SCLogNotice("%d - IDS\n", pf_re->ofldsFinalIDS);
+        setOffloads(pf_re->ofldsFinalIDS, &iconf->cntOfldsFromPf[i], iconf->idxOfldsFromPf[i]);
     }
 
     SCReturnInt(0);
