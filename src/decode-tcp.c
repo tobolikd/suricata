@@ -250,11 +250,8 @@ int DecodeTCP(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
 {
     StatsIncr(tv, dtv->counter_tcp);
 
-    if (unlikely(DecodeTCPPacket(tv, p, pkt,len) < 0)) {
-        SCLogDebug("invalid TCP packet");
-        CLEAR_TCP_PACKET(p);
-        return TM_ECODE_FAILED;
-    }
+    p->tcph = (TCPHdr *)pkt;
+    p->payload = (uint8_t *)pkt + p->PFl4_len;
 
     /* update counters */
     if ((p->tcph->th_flags & (TH_SYN | TH_ACK)) == (TH_SYN | TH_ACK)) {

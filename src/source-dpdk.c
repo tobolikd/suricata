@@ -97,6 +97,11 @@ TmEcode NoDPDKSupportExit(ThreadVars *tv, const void *initdata, void **data)
 
 static struct timeval machine_start_time = { 0, 0 };
 
+#define READ_DATA_FROM_PRIV(dst, size) do {        \
+    memcpy((dst), priv_sec + (offset<<3), (size)); \
+    offset += (size);                              \
+} while(0)
+
 static TmEcode ReceiveDPDKThreadInit(ThreadVars *, const void *, void **);
 static void ReceiveDPDKThreadExitStats(ThreadVars *, void *);
 static TmEcode ReceiveDPDKThreadDeinit(ThreadVars *, void *);
@@ -698,6 +703,43 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
                 segmented_mbufs_warned = 1;
             }
 
+            void *priv_sec = rte_mbuf_to_priv(ptv->received_mbufs[i]);
+            uint16_t offset;
+
+            memset(&p->PFl4_len, 0x00, sizeof(uint16_t));
+            for (int t = 0; t < ptv->rings.cntOfldsFromPf; t++) {
+                memcpy(&offset, priv_sec + t * 16, sizeof(uint16_t));
+                if (offset == 0)
+                    continue;
+
+                switch (ptv->rings.idxOfldsFromPf[t]) {
+                    case IPV4_ID:
+                        READ_DATA_FROM_PRIV(&p->src, sizeof(Address));
+                        READ_DATA_FROM_PRIV(&p->dst, sizeof(Address));
+                        READ_DATA_FROM_PRIV(&p->events, sizeof(PacketEngineEvents));
+                        break;
+                    case IPV6_ID:
+                        READ_DATA_FROM_PRIV(&p->src, sizeof(Address));
+                        READ_DATA_FROM_PRIV(&p->dst, sizeof(Address));
+                        break;
+                    case TCP_ID:
+                        READ_DATA_FROM_PRIV(&p->sp, sizeof(Port));
+                        READ_DATA_FROM_PRIV(&p->dp, sizeof(Port));
+                        READ_DATA_FROM_PRIV(&p->proto, sizeof(uint8_t));
+                        READ_DATA_FROM_PRIV(&p->payload_len, sizeof(uint16_t));
+                        READ_DATA_FROM_PRIV(&p->PFl4_len, sizeof(uint16_t));
+                        READ_DATA_FROM_PRIV(&p->events, sizeof(PacketEngineEvents));
+                        break;
+                    case UDP_ID:
+                        READ_DATA_FROM_PRIV(&p->sp, sizeof(Port));
+                        READ_DATA_FROM_PRIV(&p->dp, sizeof(Port));
+                        READ_DATA_FROM_PRIV(&p->proto, sizeof(uint8_t));
+                        READ_DATA_FROM_PRIV(&p->payload_len, sizeof(uint16_t));
+                        READ_DATA_FROM_PRIV(&p->PFl4_len, sizeof(uint16_t));
+                        break;
+                }
+            }
+
             PacketSetData(p, rte_pktmbuf_mtod(p->dpdk_v.mbuf, uint8_t *),
                     rte_pktmbuf_pkt_len(p->dpdk_v.mbuf));
             if (TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK) {
@@ -738,6 +780,12 @@ void ReceiveDPDKSetRings(DPDKThreadVars *ptv, DPDKIfaceConfig *iconf, uint16_t q
     iconf->results_rings[queue_id] = NULL;
     ptv->rings.msg_mp = iconf->messages_mempools[queue_id];
     iconf->messages_mempools[queue_id] = NULL;
+
+    ptv->rings.cntOfldsFromPf = iconf->cntOfldsFromPf[queue_id];
+    iconf->cntOfldsFromPf[queue_id] = 0;
+
+    memcpy(ptv->rings.idxOfldsFromPf, iconf->idxOfldsFromPf[queue_id], 16);
+    memset(iconf->idxOfldsFromPf[queue_id], 0, 16);
 }
 
 /**

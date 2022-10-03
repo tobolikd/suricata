@@ -25,6 +25,14 @@
 
 #include "util-dpdk.h"
 
+struct OffloadsAttrsPf {
+    const char *Ipv4;
+    const char *Ipv6;
+    const char *Tcp;
+    const char *Udp;
+};
+
+
 typedef struct DPDKIfaceConfigAttributes_ {
     const char *threads;
     const char *operation_mode;
@@ -40,11 +48,13 @@ typedef struct DPDKIfaceConfigAttributes_ {
     const char *tx_descriptors;
     const char *copy_mode;
     const char *copy_iface;
+    struct OffloadsAttrsPf ofldsFromPfToSur;
 } DPDKIfaceConfigAttributes;
 
 int DeviceConfigure(DPDKIfaceConfig *iconf);
 int RunModeIdsDpdkWorkers(void);
 void RunModeDpdkRegister(void);
 const char *RunModeDpdkGetDefaultMode(void);
+void setOffloads(uint16_t , uint16_t*, uint16_t*);
 
 #endif /* __RUNMODE_DPDK_H__ */

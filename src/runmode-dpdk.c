@@ -152,7 +152,20 @@ DPDKIfaceConfigAttributes dpdk_yaml = {
     .tx_descriptors = "tx-descriptors",
     .copy_mode = "copy-mode",
     .copy_iface = "copy-iface",
+    .ofldsFromPfToSur = {
+        .Ipv4 = "IPV4",
+        .Ipv6 = "IPV6",
+        .Tcp = "TCP",
+        .Udp = "UDP",
+    },
 };
+
+#define OFFLOADS_PF                                  \
+    X(dpdk_yaml.ofldsFromPfToSur.Ipv4, IPV4_OFFLOAD) \
+    X(dpdk_yaml.ofldsFromPfToSur.Ipv6, IPV6_OFFLOAD) \
+    X(dpdk_yaml.ofldsFromPfToSur.Tcp, TCP_OFFLOAD)   \
+    X(dpdk_yaml.ofldsFromPfToSur.Udp, UDP_OFFLOAD)
+
 
 char mz_name[RTE_MEMZONE_NAMESIZE] = {0};
 
@@ -471,6 +484,12 @@ static void DPDKDerefConfig(void *conf)
         }
         if (iconf->messages_mempools != NULL) {
             SCFree(iconf->messages_mempools);
+        }
+        if (iconf->cntOfldsFromPf != NULL) {
+            SCFree(iconf->cntOfldsFromPf);
+        }
+        if (iconf->idxOfldsFromPf != NULL) {
+            SCFree(iconf->idxOfldsFromPf);
         }
 
         SCFree(iconf);
@@ -959,6 +978,20 @@ static int ConfigLoad(DPDKIfaceConfig *iconf, const char *iface)
     if (retval < 0)
         SCReturnInt(retval);
 
+    ConfNode *config;
+
+    config = ConfGetNode("offloadsFromPfToSur");
+    if (config == NULL)
+        FatalError(SC_ERR_OFFLOADS, "failed to find \"offloadsFromPfToSur\" for Suricata");
+
+#define X(str, MACRO)                                                    \
+    if ((retval = ConfGetChildValueBool(config, str, &entry_bool)) == 1) \
+        iconf->ofldsSurWant |= MACRO(entry_bool);                        \
+    else                                                                 \
+        SCReturnInt(retval);
+    OFFLOADS_PF
+#undef X
+
     SCReturnInt(0);
 }
 
@@ -1351,7 +1384,7 @@ static int DeviceConfigureQueues(DPDKIfaceConfig *iconf, const struct rte_eth_de
             iconf->iface, mempool_name, iconf->mempool_size, iconf->mempool_cache_size, mbuf_size);
 
     iconf->pkt_mempool = rte_pktmbuf_pool_create(mempool_name, iconf->mempool_size,
-            iconf->mempool_cache_size, 0, mbuf_size, (int)iconf->socket_id);
+            iconf->mempool_cache_size, 128, mbuf_size, (int)iconf->socket_id);
     if (iconf->pkt_mempool == NULL) {
         retval = -rte_errno;
         SCLogError("%s: rte_pktmbuf_pool_create failed with code %d (mempool: %s) - %s",
@@ -1589,6 +1622,17 @@ static struct PFConfRingEntry *DeviceRingsFindPFConfRingEntry(const char *memzon
     return NULL;
 }
 
+void setOffloads(uint16_t finalOffloads, uint16_t* cntOffloads, uint16_t* indexOffloads)
+{
+    // TODO create a constant variable '16'
+    for (int i = 0; i < 16; i++) {
+        if (((1 << i) & finalOffloads) != 0) {
+            indexOffloads[*cntOffloads] = i;
+            (*cntOffloads)++;
+        }
+    }
+}
+
 static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
 {
     SCEnter();
@@ -1638,6 +1682,18 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
         SCReturnInt(-ENOMEM);
     }
 
+    iconf->cntOfldsFromPf = SCCalloc(rings_cnt, sizeof(uint16_t));
+    if (iconf->cntOfldsFromPf == NULL) {
+        SCLogError(SC_ERR_DPDK_INIT, "Failed to calloc cntOfldsFromPf");
+        SCReturnInt(-ENOMEM);
+    }
+
+    iconf->idxOfldsFromPf = SCCalloc(rings_cnt, sizeof(uint16_t[16]));
+    if (iconf->idxOfldsFromPf == NULL) {
+        SCLogError(SC_ERR_DPDK_INIT, "Failed to calloc idxOfldsFromPf");
+        SCReturnInt(-ENOMEM);
+    }
+
     for (int32_t i = 0; i < rings_cnt; ++i) {
         const char *name;
         name = DeviceRingNameInit(iconf->iface, i);
@@ -1657,6 +1713,8 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
         iconf->results_rings[i] = pf_re->results_ring;
         iconf->messages_mempools[i] = pf_re->message_mp;
 
+        pf_re->ofldsSurWant = iconf->ofldsSurWant;
+
         if (iconf->copy_mode == DPDK_COPY_MODE_NONE) {
             iconf->tx_rings[i] = NULL;
         } else {
@@ -1668,6 +1726,34 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
                 SCReturnInt(-ENOENT);
             }
         }
+    }
+
+    // TODO upgrade it
+    struct rte_mp_msg req;
+    struct rte_mp_reply reply;
+    memset(&req, 0, sizeof(req));
+    strlcpy(req.name, IPC_ACTION_SET_UP_OFFLOADS, RTE_MP_MAX_NAME_LEN);
+    const struct timespec tss = {.tv_sec = 3, .tv_nsec = 0};
+    retval = rte_mp_request_sync(&req, &reply, &tss);
+
+    for (int32_t i = 0; i < rings_cnt; ++i) {
+        const char *name;
+        name = DeviceRingNameInit(iconf->iface, i);
+        SCLogDebug("Looking up rx ring: %s", name);
+        iconf->rx_rings[i] = rte_ring_lookup(name);
+        if (iconf->rx_rings[i] == NULL) {
+            SCLogError(SC_ERR_DPDK_INIT, "rte_ring_lookup(): cannot get rx ring '%s'", name);
+            SCReturnInt(-ENOENT);
+        }
+
+        pf_re = DeviceRingsFindPFConfRingEntry(mz_name, name);
+        if (pf_re == NULL) {
+            SCLogError(SC_ERR_DPDK_INIT, "cannot get prefilter ring entry'%s'", name);
+            SCReturnInt(-ENOENT);
+        }
+
+        SCLogNotice("%d - IDS\n", pf_re->ofldsFinalIDS);
+        setOffloads(pf_re->ofldsFinalIDS, &iconf->cntOfldsFromPf[i], iconf->idxOfldsFromPf[i]);
     }
 
     SCReturnInt(0);
