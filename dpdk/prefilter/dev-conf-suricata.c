@@ -90,6 +90,7 @@ struct RingEntryAttributes {
     struct NicConfigAttributes nic_config;
     struct BypassMessageAttributes bypass_messages;
     struct OffloadsAttrsPf ofldsFromPfToSur;
+    struct OffloadsAttrsSur ofldsFromSurToPf;
 };
 
 #define PREFILTER_CONF_DEFAULT_RSS_HF RTE_ETH_RSS_IP
@@ -106,6 +107,7 @@ struct RingEntryAttributes {
 #define RESULTS_RING_PREFIX "results-ring."
 #define MSG_MEMPOOL_PREFIX  "message-mempool."
 #define OFFLOADS_PREFIX_PF  "offloadsFromPfToSur."
+#define OFFLOADS_PREFIX_SUR "offloadsFromSurToPf."
 
 const struct RingEntryAttributes pf_yaml = {
     .main_ring = {
@@ -154,16 +156,20 @@ const struct RingEntryAttributes pf_yaml = {
         .Tcp = OFFLOADS_PREFIX_PF "TCP",
         .Udp = OFFLOADS_PREFIX_PF "UDP",
     },
-
+    .ofldsFromSurToPf = {
+        .matchRules = OFFLOADS_PREFIX_SUR "matchRules",
+    },
 };
 
 #define PF_NODE_NAME_MAX 1024
-#define OFFLOADS_PF \
+#define OFFLOADS_PF                                \
     X(pf_yaml.ofldsFromPfToSur.Ipv4, IPV4_OFFLOAD) \
     X(pf_yaml.ofldsFromPfToSur.Ipv6, IPV6_OFFLOAD) \
-    X(pf_yaml.ofldsFromPfToSur.Tcp, TCP_OFFLOAD) \
+    X(pf_yaml.ofldsFromPfToSur.Tcp, TCP_OFFLOAD)   \
     X(pf_yaml.ofldsFromPfToSur.Udp, UDP_OFFLOAD)
 
+#define OFFLOADS_SUR \
+    X(pf_yaml.ofldsFromSurToPf.matchRules, MATCH_RULES_OFFLOAD)
 
 /**
  * \brief Find the configuration node for a specific item.
@@ -529,7 +535,16 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re
         return retval;
     OFFLOADS_PF
 #undef X
-    Log().notice("OFFLOADS: Prefilter reads from conf file offloads: %d", re->ofldsPfSetSur);
+
+#define X(str, MACRO) \
+    if ((retval = SetOffloadsFromConf(str, rnode)) > -1) \
+        re->ofldsPfWant |= MACRO(retval); \
+    else \
+        return retval;
+    OFFLOADS_SUR
+#undef X
+
+    Log().notice("OFFLOADS: Prefilter reads from conf file offloads: %d, %d", re->ofldsPfSetSur, re->ofldsPfWant);
 
     return 0;
 }
