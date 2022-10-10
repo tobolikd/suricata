@@ -704,6 +704,7 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
             memset(&p->PFl4_len, 0x00, sizeof(uint16_t));
             for (int t = 0; t < ptv->rings.cntOfldsFromPf; t++) {
                 memcpy(&offset, priv_sec + t * 16, sizeof(uint16_t));
+                // if the offset was not filled, skip the offload reading part
                 if (offset == 0)
                     continue;
 
@@ -775,12 +776,14 @@ void ReceiveDPDKSetRings(DPDKThreadVars *ptv, DPDKIfaceConfig *iconf, uint16_t q
     iconf->results_rings[queue_id] = NULL;
     ptv->rings.msg_mp = iconf->messages_mempools[queue_id];
     iconf->messages_mempools[queue_id] = NULL;
-
     ptv->rings.cntOfldsFromPf = iconf->cntOfldsFromPf[queue_id];
     iconf->cntOfldsFromPf[queue_id] = 0;
-
     memcpy(ptv->rings.idxOfldsFromPf, iconf->idxOfldsFromPf[queue_id], 16);
     memset(iconf->idxOfldsFromPf[queue_id], 0, 16);
+    ptv->rings.cntOfldsToPf = iconf->cntOfldsToPf;
+    iconf->cntOfldsToPf = 0;
+    memcpy(ptv->rings.idxOfldsToPf, iconf->idxOfldsToPf, 16);
+    memset(iconf->idxOfldsToPf, 0, 16);
 }
 
 /**
