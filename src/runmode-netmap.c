@@ -59,16 +59,16 @@ void RunModeIdsNetmapRegister(void)
 {
     RunModeRegisterNewRunMode(RUNMODE_NETMAP, "single",
             "Single threaded netmap mode",
-            RunModeIdsNetmapSingle);
+            RunModeIdsNetmapSingle, NULL);
     RunModeRegisterNewRunMode(RUNMODE_NETMAP, "workers",
             "Workers netmap mode, each thread does all"
             " tasks from acquisition to logging",
-            RunModeIdsNetmapWorkers);
+            RunModeIdsNetmapWorkers, NULL);
     RunModeRegisterNewRunMode(RUNMODE_NETMAP, "autofp",
             "Multi-threaded netmap mode.  Packets from "
             "each flow are assigned to a single detect "
             "thread.",
-            RunModeIdsNetmapAutoFp);
+            RunModeIdsNetmapAutoFp, NULL);
     return;
 }
 

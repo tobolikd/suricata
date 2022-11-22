@@ -90,7 +90,7 @@ void RunModeNapatechRegister(void)
     RunModeRegisterNewRunMode(RUNMODE_NAPATECH, "workers",
             "Workers Napatech mode, each thread does all"
             " tasks from acquisition to logging",
-            RunModeNapatechWorkers);
+            RunModeNapatechWorkers, NULL);
     return;
 #endif
 }

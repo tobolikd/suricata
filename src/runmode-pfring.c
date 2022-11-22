@@ -55,14 +55,14 @@ void RunModeIdsPfringRegister(void)
                               "thread, unlike \"pfring_auto\" where packets "
                               "from the same flow can be processed by any "
                               "detect thread",
-                              RunModeIdsPfringAutoFp);
+                              RunModeIdsPfringAutoFp, NULL);
     RunModeRegisterNewRunMode(RUNMODE_PFRING, "single",
                               "Single threaded pfring mode",
-                              RunModeIdsPfringSingle);
+                              RunModeIdsPfringSingle, NULL);
     RunModeRegisterNewRunMode(RUNMODE_PFRING, "workers",
                               "Workers pfring mode, each thread does all"
                               " tasks from acquisition to logging",
-                              RunModeIdsPfringWorkers);
+                              RunModeIdsPfringWorkers, NULL);
     return;
 }
 

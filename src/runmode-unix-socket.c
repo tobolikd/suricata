@@ -609,10 +609,10 @@ void RunModeUnixSocketRegister(void)
     /* a bit of a hack, but register twice to --list-runmodes shows both */
     RunModeRegisterNewRunMode(RUNMODE_UNIX_SOCKET, "single",
                               "Unix socket mode",
-                              RunModeUnixSocketMaster);
+                              RunModeUnixSocketMaster, NULL);
     RunModeRegisterNewRunMode(RUNMODE_UNIX_SOCKET, "autofp",
                               "Unix socket mode",
-                              RunModeUnixSocketMaster);
+                              RunModeUnixSocketMaster, NULL);
 #endif
 }
 

@@ -65,24 +65,6 @@ const char *RunModeAFPGetDefaultMode(void)
     return "workers";
 }
 
-void RunModeIdsAFPRegister(void)
-{
-    RunModeRegisterNewRunMode(RUNMODE_AFP_DEV, "single",
-                              "Single threaded af-packet mode",
-                              RunModeIdsAFPSingle);
-    RunModeRegisterNewRunMode(RUNMODE_AFP_DEV, "workers",
-                              "Workers af-packet mode, each thread does all"
-                              " tasks from acquisition to logging",
-                              RunModeIdsAFPWorkers);
-    RunModeRegisterNewRunMode(RUNMODE_AFP_DEV, "autofp",
-                              "Multi socket AF_PACKET mode.  Packets from "
-                              "each flow are assigned to a single detect "
-                              "thread.",
-                              RunModeIdsAFPAutoFp);
-    return;
-}
-
-
 #ifdef HAVE_AF_PACKET
 
 static void AFPDerefConfig(void *conf)
@@ -778,7 +760,7 @@ static void AFPRunModeEnableIPS(void)
     }
 }
 
-#endif
+#endif /* HAVE_AF_PACKET */
 
 
 int RunModeIdsAFPAutoFp(void)
@@ -802,7 +784,7 @@ int RunModeIdsAFPAutoFp(void)
         FatalError(SC_ERR_FATAL, "Unable to init peers list.");
     }
 
-    ret = RunModeSetLiveCaptureAutoFp(ParseAFPConfig, AFPRunModeEnableIPS, AFPConfigGeThreadsCount,
+    ret = RunModeSetLiveCaptureAutoFp(ParseAFPConfig, NULL, AFPConfigGeThreadsCount,
             "ReceiveAFP", "DecodeAFP", thread_name_autofp, live_dev);
     if (ret != 0) {
         FatalError(SC_ERR_FATAL, "Unable to start runmode");
@@ -880,7 +862,7 @@ int RunModeIdsAFPWorkers(void)
         FatalError(SC_ERR_FATAL, "Unable to init peers list.");
     }
 
-    ret = RunModeSetLiveCaptureWorkers(ParseAFPConfig, AFPRunModeEnableIPS, AFPConfigGeThreadsCount,
+    ret = RunModeSetLiveCaptureWorkers(ParseAFPConfig, NULL, AFPConfigGeThreadsCount,
             "ReceiveAFP", "DecodeAFP", thread_name_workers, live_dev);
     if (ret != 0) {
         FatalError(SC_ERR_FATAL, "Unable to start runmode");
@@ -895,6 +877,23 @@ int RunModeIdsAFPWorkers(void)
 
 #endif /* HAVE_AF_PACKET */
     SCReturnInt(0);
+}
+
+void RunModeIdsAFPRegister(void)
+{
+    RunModeRegisterNewRunMode(RUNMODE_AFP_DEV, "single",
+            "Single threaded af-packet mode",
+            RunModeIdsAFPSingle, AFPRunModeEnableIPS);
+    RunModeRegisterNewRunMode(RUNMODE_AFP_DEV, "workers",
+            "Workers af-packet mode, each thread does all"
+            " tasks from acquisition to logging",
+            RunModeIdsAFPWorkers, AFPRunModeEnableIPS);
+    RunModeRegisterNewRunMode(RUNMODE_AFP_DEV, "autofp",
+            "Multi socket AF_PACKET mode.  Packets from "
+            "each flow are assigned to a single detect "
+            "thread.",
+            RunModeIdsAFPAutoFp, AFPRunModeEnableIPS);
+    return;
 }
 
 /**

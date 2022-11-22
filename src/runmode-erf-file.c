@@ -40,12 +40,12 @@ void RunModeErfFileRegister(void)
 {
     RunModeRegisterNewRunMode(RUNMODE_ERF_FILE, "single",
         "Single threaded ERF file mode",
-        RunModeErfFileSingle);
+        RunModeErfFileSingle, NULL);
 
     RunModeRegisterNewRunMode(RUNMODE_ERF_FILE, "autofp",
         "Multi threaded ERF file mode.  Packets from "
         "each flow are assigned to a single detect thread",
-        RunModeErfFileAutoFp);
+        RunModeErfFileAutoFp, NULL);
 
     return;
 }

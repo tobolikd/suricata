@@ -47,7 +47,7 @@ void RunModeIpsWinDivertRegister(void)
     RunModeRegisterNewRunMode(
             RUNMODE_WINDIVERT, "autofp",
             "Multi-threaded WinDivert IPS mode load-balanced by flow",
-            RunModeIpsWinDivertAutoFp);
+            RunModeIpsWinDivertAutoFp, NULL);
 }
 
 int RunModeIpsWinDivertAutoFp(void)
