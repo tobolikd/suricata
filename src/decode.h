@@ -658,6 +658,8 @@ typedef struct Packet_
          */
         SCSpinlock tunnel_lock;
     } persistent;
+
+    uint8_t metadata_flags;
 } Packet;
 
 /** highest mtu of the interfaces we monitor */
