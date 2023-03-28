@@ -21,6 +21,11 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
+
+#define _DEFAULT_SOURCE 1 // for time.h
+#define __rtems__ 1 // for time.h
+#define __USE_MISC 1 // for time.h
+
 #include <stdio.h>
 #include <malloc.h>
 #include <errno.h>
@@ -331,6 +336,8 @@ int DevConfSharedConfInit(void)
         Log().error(rte_errno, "Error (%s): failed to reserve memzone " PREFILTER_CONF_MEMZONE_NAME,
                 rte_strerror(rte_errno));
         return -rte_errno;
+    } else {
+        ctx.shared_conf = mz;
     }
     Log().debug("Reserved memzone %s on 0x%p size of %d", PREFILTER_CONF_MEMZONE_NAME, mz->addr,
             conf_size);

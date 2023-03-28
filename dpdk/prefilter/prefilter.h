@@ -26,6 +26,10 @@
 #define SURICATA_PREFILTER_H
 
 #define _POSIX_C_SOUCRE 200809L
+#define _DEFAULT_SOURCE 1
+
+#include <sys/time.h>
+#include <time.h>
 
 #include <rte_eal.h>
 #include <rte_atomic.h>
@@ -35,6 +39,8 @@
 
 #include "dev-conf.h"
 #include "hash-table-bypass.h"
+
+#define PREFILTER_CONF_MEMZONE_NAME "prefilter_conf"
 
 extern struct ctx_global_resource ctx;
 
@@ -73,11 +79,22 @@ struct ctx_ring_conf_list_entry_resource {
     struct ctx_htable_resource htable_bypass; // bypass hash tables
 };
 
+struct action_control {
+    bool attached;
+    bool app_ready;
+};
+
+struct app_control {
+    struct action_control actions;
+};
+
 struct ctx_global_resource {
     struct ctx_ring_conf_list_entry_resource *ring_conf_entries;
     uint16_t ring_conf_entries_cnt;
     struct ctx_lcore_state_resource lcores_state;
     struct pf_stats *app_stats;
+    struct app_control status;
+    const struct rte_memzone *shared_conf;
 };
 
 #endif // SURICATA_PREFILTER_H
