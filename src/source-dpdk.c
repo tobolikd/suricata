@@ -43,6 +43,7 @@
 #include "util-privs.h"
 #include "action-globals.h"
 #include "util-dpdk.h"
+#include "detect.h"
 
 #ifndef HAVE_DPDK
 

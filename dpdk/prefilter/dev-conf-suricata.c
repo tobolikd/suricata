@@ -89,8 +89,7 @@ struct RingEntryAttributes {
     const char *bypass_mp_cache_entries;
     struct NicConfigAttributes nic_config;
     struct BypassMessageAttributes bypass_messages;
-    struct PfOffloadsAttrs oflds_from_pf_to_suri;
-    struct SuriOffloadsAttrs oflds_from_suri_to_pf;
+    struct MetadataAttrs metadata;
 };
 
 #define PREFILTER_CONF_DEFAULT_RSS_HF RTE_ETH_RSS_IP
@@ -106,8 +105,8 @@ struct RingEntryAttributes {
 #define TASK_RING_PREFIX     "task-ring."
 #define RESULTS_RING_PREFIX  "results-ring."
 #define MSG_MEMPOOL_PREFIX   "message-mempool."
-#define PF_OFFLOADS_PREFIX   "offloads-from-pf-to-suri."
-#define SURI_OFFLOADS_PREFIX "offloads-from-suri-to-pf."
+#define PF_OFFLOADS_PREFIX   "metadata.offloads-from-pf-to-suri."
+#define SURI_OFFLOADS_PREFIX "metadata.offloads-from-suri-to-pf."
 
 const struct RingEntryAttributes pf_yaml = {
     .main_ring = {
@@ -150,15 +149,18 @@ const struct RingEntryAttributes pf_yaml = {
             .mp_cache_entries = MESSAGES_PREFIX MSG_MEMPOOL_PREFIX "cache-entries",
         },
     },
-    .oflds_from_pf_to_suri = {
-        .ipv4 = PF_OFFLOADS_PREFIX "IPV4",
-        .ipv6 = PF_OFFLOADS_PREFIX "IPV6",
-        .tcp = PF_OFFLOADS_PREFIX "TCP",
-        .udp = PF_OFFLOADS_PREFIX "UDP",
-    },
-    .oflds_from_suri_to_pf = {
-        .matchRules = SURI_OFFLOADS_PREFIX "matchRules",
-    },
+    .metadata = {
+        .oflds_from_pf_to_suri = {
+            .ipv4 = PF_OFFLOADS_PREFIX "IPV4",
+            .ipv6 = PF_OFFLOADS_PREFIX "IPV6",
+            .tcp = PF_OFFLOADS_PREFIX "TCP",
+            .udp = PF_OFFLOADS_PREFIX "UDP",
+        },
+        .oflds_from_suri_to_pf = {
+            .matchRules = SURI_OFFLOADS_PREFIX "matchRules",
+        },
+        .private_space_size = "metadata.private-space-size",
+    }
 };
 
 #define PF_NODE_NAME_MAX 1024
@@ -528,31 +530,31 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re
         re->msgs.mempool.cache_entries = entry_int;
     }
 
-    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.oflds_from_pf_to_suri.ipv4)) > -1) {
+    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.metadata.oflds_from_pf_to_suri.ipv4)) > -1) {
         re->oflds_pf_support |= IPV4_OFFLOAD(retval);
     } else {
         return retval;
     }
 
-    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.oflds_from_pf_to_suri.ipv6)) > -1) {
+    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.metadata.oflds_from_pf_to_suri.ipv6)) > -1) {
         re->oflds_pf_support |= IPV6_OFFLOAD(retval);
     } else {
         return retval;
     }
 
-    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.oflds_from_pf_to_suri.tcp)) > -1) {
+    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.metadata.oflds_from_pf_to_suri.tcp)) > -1) {
         re->oflds_pf_support |= TCP_OFFLOAD(retval);
     } else {
         return retval;
     }
 
-    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.oflds_from_pf_to_suri.udp)) > -1) {
+    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.metadata.oflds_from_pf_to_suri.udp)) > -1) {
         re->oflds_pf_support |= UDP_OFFLOAD(retval);
     } else {
         return retval;
     }
 
-    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.oflds_from_suri_to_pf.matchRules)) > -1) {
+    if ((retval = SetOffloadsFromConf(rnode, pf_yaml.metadata.oflds_from_suri_to_pf.matchRules)) > -1) {
         re->oflds_pf_requested |= MATCH_RULES_OFFLOAD(retval);
     } else {
         return retval;
