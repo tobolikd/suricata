@@ -24,8 +24,15 @@
 #ifndef METADATA_H
 #define METADATA_H
 
+#define _DEFAULT_SOURCE 1 // for time.h
+#define __rtems__ 1 // for time.h
+#define __USE_MISC 1 // for time.h
+#include <sys/time.h>
+
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <netinet/in.h>
+#include <stdbool.h>
+#include <string.h>
 
 #include "suricata-common.h"
 #include "conf.h"
