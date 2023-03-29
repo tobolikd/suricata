@@ -207,7 +207,7 @@ int run_mode = RUNMODE_UNKNOWN;
 
 /** Engine mode: inline (ENGINE_MODE_IPS) or just
   * detection mode (ENGINE_MODE_IDS by default) */
-static enum EngineMode g_engine_mode = ENGINE_MODE_IDS;
+static enum EngineMode g_engine_mode = ENGINE_MODE_UNKNOWN;
 
 /** Host mode: set if box is sniffing only
  * or is a router */
@@ -248,11 +248,17 @@ int SuriHasSigFile(void)
 
 int EngineModeIsIPS(void)
 {
+#ifdef DEBUG
+    BUG_ON(g_engine_mode == ENGINE_MODE_UNKNOWN);
+#endif
     return (g_engine_mode == ENGINE_MODE_IPS);
 }
 
 int EngineModeIsIDS(void)
 {
+#ifdef DEBUG
+    BUG_ON(g_engine_mode == ENGINE_MODE_UNKNOWN);
+#endif
     return (g_engine_mode == ENGINE_MODE_IDS);
 }
 
@@ -2456,15 +2462,14 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
     }
 }
 
-static int PostDeviceFinalizedSetup(SCInstance *suri)
+static void RunModeEngineIsIPS(SCInstance *suri)
 {
-    SCEnter();
-
 #ifdef HAVE_AF_PACKET
     if (suri->run_mode == RUNMODE_AFP_DEV) {
         if (AFPRunModeIsIPS()) {
             SCLogInfo("AF_PACKET: Setting IPS mode");
             EngineModeSetIPS();
+            return;
         }
     }
 #endif
@@ -2473,11 +2478,13 @@ static int PostDeviceFinalizedSetup(SCInstance *suri)
         if (NetmapRunModeIsIPS()) {
             SCLogInfo("Netmap: Setting IPS mode");
             EngineModeSetIPS();
+            return;
         }
     }
 #endif
 
-    SCReturnInt(TM_ECODE_OK);
+    SCLogInfo("Setting engine mode to IDS mode by default");
+    EngineModeSetIDS();
 }
 
 static void PostConfLoadedSetupHostMode(void)
@@ -2602,6 +2609,9 @@ int PostConfLoadedSetup(SCInstance *suri)
 
     MacSetRegisterFlowStorage();
 
+    /* set engine mode if L2 IPS */
+    RunModeEngineIsIPS(suri);
+
     AppLayerSetup();
 
     /* Suricata will use this umask if provided. By default it will use the
@@ -2720,11 +2730,6 @@ int PostConfLoadedSetup(SCInstance *suri)
     DecodeGlobalConfig();
 
     LiveDeviceFinalize();
-
-    /* set engine mode if L2 IPS */
-    if (PostDeviceFinalizedSetup(suri) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);
-    }
 
     /* hostmode depends on engine mode being set */
     PostConfLoadedSetupHostMode();
