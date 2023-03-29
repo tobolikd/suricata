@@ -98,7 +98,7 @@ static int MetadataIPV4OptValidateGeneric(const IPV4Opt *o) {
             break;
         /* See: RFC 1108 */
         case IPV4_OPT_SEC: case IPV4_OPT_SID:
-            if (o->len != IPV4_OPT_SEC_LEN)
+            if (o->len != IPV4_OPT_SID_LEN)
                 return IPV4_OPT_INVALID_LEN;
 
             break;
