@@ -188,7 +188,7 @@ static int MetadataIPV4OptValidateCIPSO(const IPV4Opt *o) {
 }
 
 int MetadataDecodeIPV4Options(uint8_t *pkt, metadata_to_suri_t *metadata_to_suri, uint8_t opt_len) {
-    IPV4Options opts;
+    IPV4Options opts = { 0 };
 
     if (opt_len % 8)
         METADATA_SET_EVENT(metadata_to_suri, IPV4_OPT_PAD_REQUIRED);
