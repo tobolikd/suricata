@@ -42,6 +42,9 @@
         "icmp_code": {
             "type": "integer"
         },
+        "in_iface": {
+            "type": "string"
+        },
         "icmp_type": {
             "type": "integer"
         },
@@ -3739,6 +3742,34 @@
             "properties": {
                 "uptime": {
                     "type": "integer"
+                },
+                "capture": {
+                    "type": "object",
+                    "properties": {
+                        "packets": {
+                            "type": "integer"
+                        },
+                        "rx_errors": {
+                            "type": "integer"
+                        },
+                        "tx_errors": {
+                            "type": "integer"
+                        },
+                        "dpdk": {
+                            "type": "object",
+                            "properties": {
+                                "imissed": {
+                                    "type": "integer"
+                                },
+                                "no_mbufs": {
+                                    "type": "integer"
+                                },
+                                "ierrors": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
                 },
                 "app_layer": {
                     "type": "object",
