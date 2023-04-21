@@ -490,7 +490,10 @@ void ThreadSuricataOffloadsSetup(struct lcore_init *vals, struct lcore_values *l
     struct PFConf *pf_conf = (struct PFConf *)mz->addr;
     int iface_id = FindIfaceRings(pf_conf, vals->re->main_ring.name_base);
 
-    PrintInfoMetadata(&pf_conf->ring_entries[iface_id]);
+    if (lv->qid == 0) {
+        PrintInfoMetadata(&pf_conf->ring_entries[iface_id]);
+    }
+
     SetIdxOfFinalOfflds(pf_conf->ring_entries[iface_id].oflds_final_IDS,
             &lv->cnt_offlds_suri_requested,
             lv->idxes_offlds_suri_requested);

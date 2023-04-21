@@ -524,8 +524,8 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re
     if (!ConfNodeLookupChild(rnode, "metadata")) {
         re->oflds_pf_support = 0;
         re->oflds_pf_requested = 0;
-        Log().notice("OFFLOADS: Prefilter was not able to locate the \"metadata\" node."
-                     " Default values have been set for the offloads: 0, 0");
+        Log().info("OFFLOADS: Prefilter was not able to locate the \"metadata\" node."
+                   " Default values have been set for the offloads: 0, 0");
         return 0;
     }
 
@@ -559,7 +559,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re
         return retval;
     }
 
-    Log().notice("OFFLOADS: Prefilter reads from conf file offloads: %d, %d", re->oflds_pf_support, re->oflds_pf_requested);
+    Log().info("OFFLOADS: Prefilter reads from conf file offloads: %d, %d", re->oflds_pf_support, re->oflds_pf_requested);
     return 0;
 }
 
