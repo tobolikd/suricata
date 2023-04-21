@@ -166,15 +166,6 @@ DPDKIfaceConfigAttributes dpdk_yaml = {
     }
 };
 
-//#define OFFLOADS_PF                                       \
-//    X(dpdk_yaml.oflds_from_pf_to_suri.ipv4, IPV4_OFFLOAD) \
-//    X(dpdk_yaml.oflds_from_pf_to_suri.ipv6, IPV6_OFFLOAD) \
-//    X(dpdk_yaml.oflds_from_pf_to_suri.tcp,  TCP_OFFLOAD)  \
-//    X(dpdk_yaml.oflds_from_pf_to_suri.udp,  UDP_OFFLOAD)
-//
-//#define OFFLOADS_SUR \
-//    X(dpdk_yaml.oflds_from_suri_to_pf.matchRules, MATCH_RULES_OFFLOAD)
-
 char mz_name[RTE_MEMZONE_NAMESIZE] = {0};
 
 static int SharedConfNameIsSet()
@@ -989,7 +980,11 @@ static int ConfigLoad(DPDKIfaceConfig *iconf, const char *iface)
     ConfNode *config, *next_node;
     config = ConfGetChildWithDefault(if_root, if_default, "metadata");
     if (config == NULL) {
-        FatalError("failed to find \"metadata\" for Suricata");
+        SCLogInfo("OFFLOADS: Suricata was not able to locate the \"metadata\" node."
+                  " Default values have been set for the offloads: 0, 0");
+        iconf->oflds_suri_requested = 0;
+        iconf->oflds_suri_support = 0;
+        SCReturnInt(0);
     }
 
     next_node = ConfNodeLookupChild(config, "offloads-from-pf-to-suri");
@@ -1032,27 +1027,7 @@ static int ConfigLoad(DPDKIfaceConfig *iconf, const char *iface)
         SCReturnInt(retval);
     }
 
-//#define X(str, MACRO)                                                    \
-//    if ((retval = ConfGetChildValueBool(config, str, &entry_bool)) == 1) \
-//        iconf->oflds_suri_requested |= MACRO(entry_bool);                \
-//    else                                                                 \
-//        SCReturnInt(retval);
-//    OFFLOADS_PF
-//#undef X
-//
-//    config = ConfGetChildWithDefault(if_root, if_default, "offloads-from-suri-to-pf");
-//    if (config == NULL)
-//        FatalError(SC_ERR_DPDK_OFFLOADS_INIT, "failed to find \"offloads-from-suri-to-pf\" for Suricata");
-//
-//#define X(str, MACRO)                                                     \
-//    if ((retval = ConfGetChildValueBool(config, str, &entry_bool)) == 1)  \
-//        iconf->oflds_suri_support |= MACRO(entry_bool);                   \
-//    else                                                                  \
-//      SCReturnInt(retval);
-//    OFFLOADS_SUR
-//#undef X
-
-
+    SCLogInfo("OFFLOADS: Suricata reads from conf file offloads: %d, %d", iconf->oflds_suri_requested, iconf->oflds_suri_support);
     SCReturnInt(0);
 }
 
