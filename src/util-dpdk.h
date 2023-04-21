@@ -333,8 +333,6 @@ uint32_t ArrayMaxValue(const uint32_t *arr, uint16_t arr_len);
 uint8_t CountDigits(uint32_t n);
 void DPDKCleanupEAL(void);
 
-void DPDKCloseDevice(LiveDevice *ldev);
-
 #ifdef HAVE_DPDK
 const char *DPDKGetPortNameByPortID(uint16_t pid);
 struct PFConfRingEntry {

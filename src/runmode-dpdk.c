@@ -152,6 +152,8 @@ DPDKIfaceConfigAttributes dpdk_yaml = {
     .tx_descriptors = "tx-descriptors",
     .copy_mode = "copy-mode",
     .copy_iface = "copy-iface",
+
+#ifdef BUILD_DPDK_APPS
     .metadata = {
         .oflds_from_pf_to_suri = {
                 .ipv4 = "IPV4",
@@ -164,6 +166,7 @@ DPDKIfaceConfigAttributes dpdk_yaml = {
         },
         .private_space_size = "private-space-size",
     }
+#endif /* BUILD_DPDK_APPS */
 };
 
 char mz_name[RTE_MEMZONE_NAMESIZE] = {0};
@@ -977,6 +980,7 @@ static int ConfigLoad(DPDKIfaceConfig *iconf, const char *iface)
     if (retval < 0)
         SCReturnInt(retval);
 
+#ifdef BUILD_DPDK_APPS
     ConfNode *config, *next_node;
     config = ConfGetChildWithDefault(if_root, if_default, "metadata");
     if (config == NULL) {
@@ -1028,6 +1032,8 @@ static int ConfigLoad(DPDKIfaceConfig *iconf, const char *iface)
     }
 
     SCLogInfo("OFFLOADS: Suricata reads from conf file offloads: %d, %d", iconf->oflds_suri_requested, iconf->oflds_suri_support);
+#endif /* BUILD_DPDK_APPS */
+
     SCReturnInt(0);
 }
 
@@ -1684,7 +1690,7 @@ int OffloadsAgreemnet(DPDKIfaceConfig *iconf, struct PFConfRingEntry *pf_re, int
     struct rte_mp_reply reply;
     memset(&req, 0, sizeof(req));
     strlcpy(req.name, IPC_ACTION_OFFLOADS_SETUP, RTE_MP_MAX_NAME_LEN);
-    strlcpy(req.param, iconf->iface, RTE_RING_NAMESIZE);
+    strlcpy((char*)req.param, iconf->iface, RTE_RING_NAMESIZE);
     const struct timespec tss = {.tv_sec = 5, .tv_nsec = 0};
     retval = rte_mp_request_sync(&req, &reply, &tss);
 
@@ -1738,7 +1744,7 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
 {
     SCEnter();
     uint16_t rings_cnt = iconf->threads;
-    struct PFConfRingEntry *pf_re;
+    struct PFConfRingEntry *pf_re = NULL;
     int retval;
 
     if (!DeviceRingNameIsValid(iconf->iface, rings_cnt))
