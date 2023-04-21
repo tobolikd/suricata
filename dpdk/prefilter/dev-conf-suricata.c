@@ -164,14 +164,6 @@ const struct RingEntryAttributes pf_yaml = {
 };
 
 #define PF_NODE_NAME_MAX 1024
-//#define OFFLOADS_PF                                     \
-//    X(pf_yaml.oflds_from_pf_to_suri.ipv4, IPV4_OFFLOAD) \
-//    X(pf_yaml.oflds_from_pf_to_suri.ipv6, IPV6_OFFLOAD) \
-//    X(pf_yaml.oflds_from_pf_to_suri.tcp,  TCP_OFFLOAD)  \
-//    X(pf_yaml.oflds_from_pf_to_suri.udp,  UDP_OFFLOAD)
-//
-//#define OFFLOADS_SUR \
-//    X(pf_yaml.oflds_from_suri_to_pf.matchRules, MATCH_RULES_OFFLOAD)
 
 /**
  * \brief Find the configuration node for a specific item.
@@ -279,7 +271,6 @@ int SetOffloadsFromConf(ConfNode *node, const char* name)
 
     return entry_bool;
 }
-
 
 int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re, const char *rname)
 {
@@ -530,6 +521,14 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re
         re->msgs.mempool.cache_entries = entry_int;
     }
 
+    if (!ConfNodeLookupChild(rnode, "metadata")) {
+        re->oflds_pf_support = 0;
+        re->oflds_pf_requested = 0;
+        Log().notice("OFFLOADS: Prefilter was not able to locate the \"metadata\" node."
+                     " Default values have been set for the offloads: 0, 0");
+        return 0;
+    }
+
     if ((retval = SetOffloadsFromConf(rnode, pf_yaml.metadata.oflds_from_pf_to_suri.ipv4)) > -1) {
         re->oflds_pf_support |= IPV4_OFFLOAD(retval);
     } else {
@@ -560,24 +559,7 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re
         return retval;
     }
 
-//#define X(str, MACRO) \
-//    if ((retval = SetOffloadsFromConf(rnode, str)) > -1) \
-//        re->oflds_pf_support |= MACRO(retval); \
-//    else \
-//        return retval;
-//    OFFLOADS_PF
-//#undef X
-//
-//#define X(str, MACRO) \
-//    if ((retval = SetOffloadsFromConf(rnode, str)) > -1) \
-//        re->oflds_pf_requested |= MACRO(retval); \
-//    else \
-//        return retval;
-//    OFFLOADS_SUR
-//#undef X
-
     Log().notice("OFFLOADS: Prefilter reads from conf file offloads: %d, %d", re->oflds_pf_support, re->oflds_pf_requested);
-
     return 0;
 }
 
@@ -636,8 +618,9 @@ static int DevConfSuricataConfigureDevices(struct ring_list_entry *rconf)
         suri_conf = ConfPrefitlerToSuricataAdapter(rconf, false);
 
         retval = DeviceConfigure(&suri_conf);
-        if (retval != 0)
+        if (retval != 0) {
             return retval;
+        }
 
         ConfSuricataToPrefitlerAdapter(rconf, &suri_conf, false);
     }
