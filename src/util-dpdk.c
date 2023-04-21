@@ -66,10 +66,10 @@ void DPDKCleanupEAL(void)
 #endif
 }
 
+#ifdef HAVE_DPDK
 void DPDKCloseDevice(LiveDevice *ldev)
 {
     (void)ldev; // avoid warnings of unused variable
-#ifdef HAVE_DPDK
     uint16_t port_id;
     int retval;
     if (run_mode == RUNMODE_DPDK && rte_eal_process_type() == RTE_PROC_PRIMARY) {
@@ -85,8 +85,8 @@ void DPDKCloseDevice(LiveDevice *ldev)
         SCLogDebug("%s: releasing packet mempool", ldev->dev);
         rte_mempool_free(ldev->dpdk_vars.pkt_mp);
     }
-#endif
 }
+#endif /* HAVE_DPDK */
 
 #ifdef HAVE_DPDK
 
