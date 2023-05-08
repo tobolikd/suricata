@@ -164,7 +164,6 @@ DPDKIfaceConfigAttributes dpdk_yaml = {
         .oflds_from_suri_to_pf = {
                 .matchRules = "matchRules",
         },
-        .private_space_size = "private-space-size",
     }
 #endif /* BUILD_DPDK_APPS */
 };
@@ -1426,7 +1425,7 @@ static int DeviceConfigureQueues(DPDKIfaceConfig *iconf, const struct rte_eth_de
             iconf->iface, mempool_name, iconf->mempool_size, iconf->mempool_cache_size, mbuf_size);
 
     iconf->pkt_mempool = rte_pktmbuf_pool_create(mempool_name, iconf->mempool_size,
-            iconf->mempool_cache_size, 256, mbuf_size, (int)iconf->socket_id);
+            iconf->mempool_cache_size, iconf->private_space_size, mbuf_size, (int)iconf->socket_id);
     if (iconf->pkt_mempool == NULL) {
         retval = -rte_errno;
         SCLogError("%s: rte_pktmbuf_pool_create failed with code %d (mempool: %s) - %s",
