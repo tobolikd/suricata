@@ -559,6 +559,15 @@ int DevConfSuricataLoadRingEntryConf(ConfNode *rnode, struct ring_list_entry *re
         return retval;
     }
 
+    retval = ConfGetDescendantValueInt(rnode, pf_yaml.metadata.private_space_size, &entry_int);
+    if (retval != 1 || entry_int <= 0) {
+        Log().error(ENOENT, "Unable to read value of %s",
+                pf_yaml.metadata.private_space_size);
+        return -EXIT_FAILURE;
+    } else {
+        re->private_space_size = entry_int;
+    }
+
     Log().info("OFFLOADS: Prefilter reads from conf file offloads: %d, %d", re->oflds_pf_support, re->oflds_pf_requested);
     return 0;
 }
@@ -582,6 +591,7 @@ static DPDKIfaceConfig ConfPrefitlerToSuricataAdapter(struct ring_list_entry *re
     suri_conf.mempool_size = re_suri->nic_conf.mempool_size;
     suri_conf.mempool_cache_size = re_suri->nic_conf.mempool_cache_size;
     suri_conf.rss_hf = PREFILTER_CONF_DEFAULT_RSS_HF;
+    suri_conf.private_space_size = re->private_space_size;
     return suri_conf;
 }
 

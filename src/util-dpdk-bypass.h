@@ -37,10 +37,9 @@ void DpdkIpcStop(void);
 void DpdkIpcDumpStats(void);
 void DpdkIpcDetach(void);
 
+#ifdef HAVE_DPDK
 #define IPC_VALID_RESPONSE "ok"
 #define IPC_ACTION_SHUTDOWN "shutdown"
-
-#ifdef HAVE_DPDK
 #define IPC_ACTION_ATTACH "attach"
 #define IPC_ACTION_DETACH "detach"
 #define IPC_ACTION_START "pkts_start"
