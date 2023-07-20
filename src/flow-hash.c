@@ -52,9 +52,13 @@
 #include "stream-tcp.h"
 #include "util-exception-policy.h"
 
+#include <rte_errno.h>
+
 extern TcpStreamCnf stream_config;
 
-
+struct rte_table_hash *dpdk_flow_hash_all[64];
+thread_local struct rte_table_hash *dpdk_flow_hash;
+struct rte_table_ops bt_ops;
 FlowBucket *flow_hash;
 SC_ATOMIC_EXTERN(unsigned int, flow_prune_idx);
 SC_ATOMIC_EXTERN(unsigned int, flow_flags);
@@ -660,6 +664,7 @@ static inline void NoFlowHandleIPS(Packet *p)
  */
 static Flow *FlowGetNew(ThreadVars *tv, FlowLookupStruct *fls, Packet *p)
 {
+    SCLogNotice("Flow get new pls");
     const bool emerg = ((SC_ATOMIC_GET(flow_flags) & FLOW_EMERGENCY) != 0);
 #ifdef DEBUG
     if (g_eps_flow_memcap != UINT64_MAX && g_eps_flow_memcap == p->pcap_cnt) {
@@ -725,7 +730,7 @@ static Flow *FlowGetNew(ThreadVars *tv, FlowLookupStruct *fls, Packet *p)
         /* flow is initialized (recycled) but *unlocked* */
     }
 
-    FLOWLOCK_WRLOCK(f);
+
     FlowUpdateCounter(tv, fls->dtv, p->proto);
     return f;
 }
@@ -842,102 +847,149 @@ static inline bool FlowIsTimedOut(const Flow *f, const uint32_t sec, const bool 
  */
 Flow *FlowGetFlowFromHash(ThreadVars *tv, FlowLookupStruct *fls, Packet *p, Flow **dest)
 {
-    Flow *f = NULL;
-
+//    SCLogNotice("Getting flow from heh hash - DPDK FLOWKEY");
     /* get our hash bucket and lock it */
-    const uint32_t hash = p->flow_hash;
-    FlowBucket *fb = &flow_hash[hash % flow_config.hash_size];
-    FBLOCK_LOCK(fb);
+//    const uint32_t hash = p->flow_hash;
+//    FlowBucket *fb = &flow_hash[hash % flow_config.hash_size];
+//    FBLOCK_LOCK(fb);
 
-    SCLogDebug("fb %p fb->head %p", fb, fb->head);
+    uint64_t keys_mask = 0x1;
+    DPDKFlowKey fk_help = {0};
+    DPDKFlowKey *fk[1];
+    fk[0] = &fk_help;
+    fk[0]->src = &p->src;
+    fk[0]->dst = &p->dst;
+    fk[0]->sp = p->sp;
+    fk[0]->dp = p->dp;
+    fk[0]->proto = p->proto;
 
-    /* see if the bucket already has a flow */
-    if (fb->head == NULL) {
-        f = FlowGetNew(tv, fls, p);
-        if (f == NULL) {
-            FBLOCK_UNLOCK(fb);
-            return NULL;
-        }
-
-        /* flow is locked */
-        fb->head = f;
-
-        /* got one, now lock, initialize and return */
-        FlowInit(f, p);
-        f->flow_hash = hash;
-        f->fb = fb;
-        FlowUpdateState(f, FLOW_STATE_NEW);
-
-        FlowReference(dest, f);
-
-        FBLOCK_UNLOCK(fb);
-        return f;
+    uint64_t hit_mask = 0;
+    static thread_local Flow *f_dpdk[1];
+//    SCLogNotice("Looking up flow ");
+    int ret = bt_ops.f_lookup(dpdk_flow_hash, (struct rte_mbuf **)fk, keys_mask, &hit_mask, (void **)f_dpdk);
+    if (ret != 0) {
+        FatalError("Error on lookup %s", rte_strerror(-ret));
     }
 
-    const bool emerg = (SC_ATOMIC_GET(flow_flags) & FLOW_EMERGENCY) != 0;
-    const uint32_t fb_nextts = !emerg ? SC_ATOMIC_GET(fb->next_ts) : 0;
-    /* ok, we have a flow in the bucket. Let's find out if it is our flow */
-    Flow *prev_f = NULL; /* previous flow */
-    f = fb->head;
-    do {
-        Flow *next_f = NULL;
-        const bool timedout = (fb_nextts < (uint32_t)SCTIME_SECS(p->ts) &&
-                               FlowIsTimedOut(f, (uint32_t)SCTIME_SECS(p->ts), emerg));
-        if (timedout) {
-            FLOWLOCK_WRLOCK(f);
-            next_f = f->next;
-            MoveToWorkQueue(tv, fls, fb, f, prev_f);
-            FLOWLOCK_UNLOCK(f);
-            goto flow_removed;
-        } else if (FlowCompare(f, p) != 0) {
-            FLOWLOCK_WRLOCK(f);
-            /* found a matching flow that is not timed out */
-            if (unlikely(TcpSessionPacketSsnReuse(p, f, f->protoctx) == 1)) {
-                Flow *new_f = TcpReuseReplace(tv, fls, fb, f, hash, p);
-                if (prev_f == NULL) /* if we have no prev it means new_f is now our prev */
-                    prev_f = new_f;
-                MoveToWorkQueue(tv, fls, fb, f, prev_f); /* evict old flow */
-                FLOWLOCK_UNLOCK(f); /* unlock old replaced flow */
+    if (hit_mask == 0) {
+//        SCLogNotice("Flow entry needs to be inserted");
+        Flow f = {0};
+        FlowInit(&f, p);
+        f.flow_hash = 0;
+        f.fb = NULL;
+        FlowUpdateState(&f, FLOW_STATE_NEW);
 
-                if (new_f == NULL) {
-                    FBLOCK_UNLOCK(fb);
-                    return NULL;
-                }
-                f = new_f;
-            }
-            FlowReference(dest, f);
-            FBLOCK_UNLOCK(fb);
-            return f; /* return w/o releasing flow lock */
+        int32_t key_found;
+        int retval = bt_ops.f_add(dpdk_flow_hash, fk[0], &f, &key_found, (void **)f_dpdk);
+        if (retval != 0 || f_dpdk[0] == NULL || key_found) {
+            if (retval != 0)
+                SCLogInfo("Error (%s): Bypass Hash Table add operation failed", rte_strerror(-retval));
+
+            if (f_dpdk[0] == NULL)
+                SCLogInfo("Error - entry ptr null");
+
+            if (key_found)
+                SCLogInfo("Error - key found already!");
         }
-        /* unless we removed 'f', prev_f needs to point to
-         * current 'f' when adding a new flow below. */
-        prev_f = f;
-        next_f = f->next;
 
-flow_removed:
-        if (next_f == NULL) {
-            f = FlowGetNew(tv, fls, p);
-            if (f == NULL) {
-                FBLOCK_UNLOCK(fb);
-                return NULL;
-            }
+        FlowReference(dest, f_dpdk[0]);
+//        SCLogNotice("Flow entry inserted");
+        return f_dpdk[0];
+    } else {
+//        SCLogNotice("Flow entry is in the table");
+        FlowReference(dest, f_dpdk[0]);
+        return f_dpdk[0];
+    }
 
-            /* flow is locked */
-
-            f->next = fb->head;
-            fb->head = f;
-
-            /* initialize and return */
-            FlowInit(f, p);
-            f->flow_hash = hash;
-            f->fb = fb;
-            FlowUpdateState(f, FLOW_STATE_NEW);
-            FlowReference(dest, f);
-            FBLOCK_UNLOCK(fb);
-            return f;
-        }
-        f = next_f;
-    } while (f != NULL);
+//    SCLogDebug("fb %p fb->head %p", fb, fb->head);
+//
+//    /* see if the bucket already has a flow */
+//    if (fb->head == NULL) { /////////////////////////// No flow in the bucket, insert new flow to the table and return it.
+//        f = FlowGetNew(tv, fls, p);
+//        if (f == NULL) {
+//            FBLOCK_UNLOCK(fb);
+//            return NULL;
+//        }
+//
+//        /* flow is locked */
+//        fb->head = f;
+//
+//        /* got one, now lock, initialize and return */
+//        FlowInit(f, p);
+//        f->flow_hash = hash;
+//        f->fb = fb;
+//        FlowUpdateState(f, FLOW_STATE_NEW);
+//
+//        FlowReference(dest, f);
+//
+//        FBLOCK_UNLOCK(fb);
+//        return f;
+//    }
+//
+//    const bool emerg = (SC_ATOMIC_GET(flow_flags) & FLOW_EMERGENCY) != 0;
+//    const uint32_t fb_nextts = !emerg ? SC_ATOMIC_GET(fb->next_ts) : 0;
+//    /* ok, we have a flow in the bucket. Let's find out if it is our flow */
+//    Flow *prev_f = NULL; /* previous flow */
+//    f = fb->head;
+//    do {
+//        Flow *next_f = NULL;
+//        const bool timedout = (fb_nextts < (uint32_t)SCTIME_SECS(p->ts) &&
+//                               FlowIsTimedOut(f, (uint32_t)SCTIME_SECS(p->ts), emerg));
+//        if (timedout) {
+//            FLOWLOCK_WRLOCK(f);
+//            next_f = f->next;
+//            MoveToWorkQueue(tv, fls, fb, f, prev_f);
+//            FLOWLOCK_UNLOCK(f);
+//            goto flow_removed;
+//        } else if (FlowCompare(f, p) != 0) {
+//            FLOWLOCK_WRLOCK(f);
+//            /* found a matching flow that is not timed out */
+//            if (unlikely(TcpSessionPacketSsnReuse(p, f, f->protoctx) == 1)) {
+//                Flow *new_f = TcpReuseReplace(tv, fls, fb, f, hash, p);
+//                if (prev_f == NULL) /* if we have no prev it means new_f is now our prev */
+//                    prev_f = new_f;
+//                MoveToWorkQueue(tv, fls, fb, f, prev_f); /* evict old flow */
+//                FLOWLOCK_UNLOCK(f); /* unlock old replaced flow */
+//
+//                if (new_f == NULL) {
+//                    FBLOCK_UNLOCK(fb);
+//                    return NULL;
+//                }
+//                f = new_f;
+//            }
+//            FlowReference(dest, f);
+//            FBLOCK_UNLOCK(fb);
+//            return f; /* return w/o releasing flow lock */
+//        }
+//        /* unless we removed 'f', prev_f needs to point to
+//         * current 'f' when adding a new flow below. */
+//        prev_f = f;
+//        next_f = f->next;
+//
+//flow_removed:
+//        if (next_f == NULL) {
+//            f = FlowGetNew(tv, fls, p);
+//            if (f == NULL) {
+//                FBLOCK_UNLOCK(fb);
+//                return NULL;
+//            }
+//
+//            /* flow is locked */
+//
+//            f->next = fb->head;
+//            fb->head = f;
+//
+//            /* initialize and return */
+//            FlowInit(f, p);
+//            f->flow_hash = hash;
+//            f->fb = fb;
+//            FlowUpdateState(f, FLOW_STATE_NEW);
+//            FlowReference(dest, f);
+//            FBLOCK_UNLOCK(fb);
+//            return f;
+//        }
+//        f = next_f;
+//    } while (f != NULL);
 
     /* should be unreachable */
     BUG_ON(1);
@@ -967,20 +1019,17 @@ static inline bool FlowCompareKey(Flow *f, FlowKey *key)
  */
 Flow *FlowGetExistingFlowFromFlowId(int64_t flow_id)
 {
+    SCLogNotice("Getting flow from flowid");
     uint32_t hash = flow_id & 0x0000FFFF;
     FlowBucket *fb = &flow_hash[hash % flow_config.hash_size];
-    FBLOCK_LOCK(fb);
     SCLogDebug("fb %p fb->head %p", fb, fb->head);
 
     for (Flow *f = fb->head; f != NULL; f = f->next) {
         if (FlowGetId(f) == flow_id) {
             /* found our flow, lock & return */
-            FLOWLOCK_WRLOCK(f);
-            FBLOCK_UNLOCK(fb);
             return f;
         }
     }
-    FBLOCK_UNLOCK(fb);
     return NULL;
 }
 
@@ -996,22 +1045,19 @@ Flow *FlowGetExistingFlowFromFlowId(int64_t flow_id)
  */
 static Flow *FlowGetExistingFlowFromHash(FlowKey *key, const uint32_t hash)
 {
+    SCLogNotice("Getting existing flow from hash");
     /* get our hash bucket and lock it */
     FlowBucket *fb = &flow_hash[hash % flow_config.hash_size];
-    FBLOCK_LOCK(fb);
     SCLogDebug("fb %p fb->head %p", fb, fb->head);
 
     for (Flow *f = fb->head; f != NULL; f = f->next) {
         /* see if this is the flow we are looking for */
         if (FlowCompareKey(f, key)) {
             /* found our flow, lock & return */
-            FLOWLOCK_WRLOCK(f);
-            FBLOCK_UNLOCK(fb);
             return f;
         }
     }
 
-    FBLOCK_UNLOCK(fb);
     return NULL;
 }
 
@@ -1031,6 +1077,7 @@ static Flow *FlowGetExistingFlowFromHash(FlowKey *key, const uint32_t hash)
 
 Flow *FlowGetFromFlowKey(FlowKey *key, struct timespec *ttime, const uint32_t hash)
 {
+    SCLogNotice("Getting flow from key");
     Flow *f = FlowGetExistingFlowFromHash(key, hash);
 
     if (f != NULL) {
@@ -1071,12 +1118,9 @@ Flow *FlowGetFromFlowKey(FlowKey *key, struct timespec *ttime, const uint32_t ha
     f->lastts = f->startts;
 
     FlowBucket *fb = &flow_hash[hash % flow_config.hash_size];
-    FBLOCK_LOCK(fb);
     f->fb = fb;
     f->next = fb->head;
     fb->head = f;
-    FLOWLOCK_WRLOCK(f);
-    FBLOCK_UNLOCK(fb);
     return f;
 }
 
@@ -1086,12 +1130,12 @@ Flow *FlowGetFromFlowKey(FlowKey *key, struct timespec *ttime, const uint32_t ha
 
 static inline int GetUsedTryLockBucket(FlowBucket *fb)
 {
-    int r = FBLOCK_TRYLOCK(fb);
+    int r = 0;
     return r;
 }
 static inline int GetUsedTryLockFlow(Flow *f)
 {
-    int r = FLOWLOCK_TRYWRLOCK(f);
+    int r = 0;
     return r;
 }
 static inline uint32_t GetUsedAtomicUpdate(const uint32_t val)
@@ -1157,6 +1201,7 @@ static inline bool StillAlive(const Flow *f, const SCTime_t ts)
  */
 static Flow *FlowGetUsedFlow(ThreadVars *tv, DecodeThreadVars *dtv, const SCTime_t ts)
 {
+    SCLogNotice("FlowGetUsedFlow");
     uint32_t idx = GetUsedAtomicUpdate(FLOW_GET_NEW_TRIES) % flow_config.hash_size;
     uint32_t tried = 0;
 
@@ -1180,20 +1225,16 @@ static Flow *FlowGetUsedFlow(ThreadVars *tv, DecodeThreadVars *dtv, const SCTime
 
         Flow *f = fb->head;
         if (f == NULL) {
-            FBLOCK_UNLOCK(fb);
             continue;
         }
 
         if (GetUsedTryLockFlow(f) != 0) {
             STATSADDUI64(counter_flow_get_used_eval_busy, 1);
-            FBLOCK_UNLOCK(fb);
             continue;
         }
 
         if (StillAlive(f, ts)) {
             STATSADDUI64(counter_flow_get_used_eval_reject, 1);
-            FBLOCK_UNLOCK(fb);
-            FLOWLOCK_UNLOCK(f);
             continue;
         }
 
@@ -1201,7 +1242,6 @@ static Flow *FlowGetUsedFlow(ThreadVars *tv, DecodeThreadVars *dtv, const SCTime
         fb->head = f->next;
         f->next = NULL;
         f->fb = NULL;
-        FBLOCK_UNLOCK(fb);
 
         /* rest of the flags is updated on-demand in output */
         f->flow_end_flags |= FLOW_END_FLAG_FORCED;

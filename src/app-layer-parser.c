@@ -1339,6 +1339,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
     }
 
     /* Get the parser state (if any) */
+    SCLogDebug("pstate check addr: %p", pstate);
     if (pstate == NULL) {
         f->alparser = pstate = AppLayerParserStateAlloc();
         if (pstate == NULL) {

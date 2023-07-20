@@ -903,6 +903,7 @@ static DetectRunScratchpad DetectRunSetup(
             SCLogDebug("packet doesn't have established flag set (proto %d)", p->proto);
         }
 
+        SCLogDebug("Pflow addr: %p alparser addr: %p", pflow, pflow->alparser);
         app_decoder_events = AppLayerParserHasDecoderEvents(pflow->alparser);
     }
 

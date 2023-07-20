@@ -209,6 +209,8 @@ void FlowInit(Flow *f, const Packet *p)
         }
     }
 
+    f->alparser = NULL;
+
     SCReturn;
 }
 

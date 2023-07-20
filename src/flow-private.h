@@ -23,6 +23,8 @@
 
 #ifndef __FLOW_PRIVATE_H__
 #define __FLOW_PRIVATE_H__
+#include <rte_table_hash_func.h>
+#include <rte_table_hash.h>
 
 #include "flow-hash.h"
 #include "flow-queue.h"
@@ -91,6 +93,12 @@ extern FlowProtoFreeFunc flow_freefuncs[FLOW_PROTO_MAX];
 
 /** queue to pass flows to cleanup/log thread(s) */
 extern FlowQueue flow_recycle_q;
+
+#define MAX_FLOW_TABLES 4
+extern struct rte_table_hash *dpdk_flow_hash_all[64];
+extern thread_local struct rte_table_hash *dpdk_flow_hash;
+extern struct rte_table_ops bt_ops;
+
 
 extern FlowBucket *flow_hash;
 extern FlowConfig flow_config;

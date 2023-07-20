@@ -273,6 +273,7 @@ typedef struct FlowManagerTimeoutThread {
 
 static uint32_t ProcessAsideQueue(FlowManagerTimeoutThread *td, FlowTimeoutCounters *counters)
 {
+    SCLogNotice("ProcessAsideQueueu");
     FlowQueuePrivate recycle = { NULL, NULL, 0 };
     counters->flows_aside += td->aside_queue.len;
 
@@ -286,13 +287,11 @@ static uint32_t ProcessAsideQueue(FlowManagerTimeoutThread *td, FlowTimeoutCount
                 !FlowIsBypassed(f) && FlowForceReassemblyNeedReassembly(f) == 1) {
             /* Send the flow to its thread */
             FlowForceReassemblyForFlow(f);
-            FLOWLOCK_UNLOCK(f);
             /* flow ownership is passed to the worker thread */
 
             counters->flows_aside_needs_work++;
             continue;
         }
-        FLOWLOCK_UNLOCK(f);
 
         FlowQueuePrivateAppendFlow(&recycle, f);
         if (recycle.len == 100) {
@@ -321,6 +320,7 @@ static uint32_t ProcessAsideQueue(FlowManagerTimeoutThread *td, FlowTimeoutCount
 static void FlowManagerHashRowTimeout(FlowManagerTimeoutThread *td, Flow *f, SCTime_t ts,
         int emergency, FlowTimeoutCounters *counters, uint32_t *next_ts)
 {
+    SCLogNotice("FMHashRowTimeout");
     uint32_t checked = 0;
     Flow *prev_f = NULL;
 
@@ -342,14 +342,12 @@ static void FlowManagerHashRowTimeout(FlowManagerTimeoutThread *td, Flow *f, SCT
             continue;
         }
 
-        FLOWLOCK_WRLOCK(f);
 
         Flow *next_flow = f->next;
 
         /* never prune a flow that is used by a packet we
          * are currently processing in one of the threads */
         if (!FlowBypassedTimeout(f, ts, counters)) {
-            FLOWLOCK_UNLOCK(f);
             prev_f = f;
             f = f->next;
             continue;
@@ -375,8 +373,8 @@ static void FlowManagerHashRowTimeout(FlowManagerTimeoutThread *td, Flow *f, SCT
 static void FlowManagerHashRowClearEvictedList(
         FlowManagerTimeoutThread *td, Flow *f, SCTime_t ts, FlowTimeoutCounters *counters)
 {
+    SCLogNotice("FlowLock");
     do {
-        FLOWLOCK_WRLOCK(f);
         Flow *next_flow = f->next;
         f->next = NULL;
         f->fb = NULL;
@@ -431,7 +429,6 @@ static uint32_t FlowTimeoutHash(FlowManagerTimeoutThread *td, SCTime_t ts, const
         for (uint32_t i = 0; i < check; i++) {
             FlowBucket *fb = &flow_hash[idx+i];
             if ((check_bits & ((TYPE)1 << (TYPE)i)) != 0 && SC_ATOMIC_GET(fb->next_ts) <= ts_secs) {
-                FBLOCK_LOCK(fb);
                 Flow *evicted = NULL;
                 if (fb->evicted != NULL || fb->head != NULL) {
                     if (fb->evicted != NULL) {
@@ -454,7 +451,6 @@ static uint32_t FlowTimeoutHash(FlowManagerTimeoutThread *td, SCTime_t ts, const
                     SC_ATOMIC_SET(fb->next_ts, UINT_MAX);
                     rows_empty++;
                 }
-                FBLOCK_UNLOCK(fb);
                 /* processed evicted list */
                 if (evicted) {
                     FlowManagerHashRowClearEvictedList(td, evicted, ts, counters);
@@ -522,10 +518,11 @@ again:
  */
 static uint32_t FlowManagerHashRowCleanup(Flow *f, FlowQueuePrivate *recycle_q, const int mode)
 {
+    SCLogNotice("FlowLock");
+
     uint32_t cnt = 0;
 
     do {
-        FLOWLOCK_WRLOCK(f);
 
         Flow *next_flow = f->next;
 
@@ -542,7 +539,6 @@ static uint32_t FlowManagerHashRowCleanup(Flow *f, FlowQueuePrivate *recycle_q, 
 
         /* no one is referring to this flow, removed from hash
          * so we can unlock it and move it to the recycle queue. */
-        FLOWLOCK_UNLOCK(f);
         FlowQueuePrivateAppendFlow(recycle_q, f);
 
         cnt++;
@@ -560,13 +556,13 @@ static uint32_t FlowManagerHashRowCleanup(Flow *f, FlowQueuePrivate *recycle_q, 
  */
 static uint32_t FlowCleanupHash(void)
 {
+    SCLogNotice("FlowCleanupHash");
     FlowQueuePrivate local_queue = { NULL, NULL, 0 };
     uint32_t cnt = 0;
 
     for (uint32_t idx = 0; idx < flow_config.hash_size; idx++) {
         FlowBucket *fb = &flow_hash[idx];
 
-        FBLOCK_LOCK(fb);
 
         if (fb->head != NULL) {
             /* we have a flow, or more than one */
@@ -577,7 +573,6 @@ static uint32_t FlowCleanupHash(void)
             cnt += FlowManagerHashRowCleanup(fb->evicted, &local_queue, 1);
         }
 
-        FBLOCK_UNLOCK(fb);
         if (local_queue.len >= 25) {
             FlowQueueAppendPrivate(&flow_recycle_q, &local_queue);
             FlowWakeupFlowRecyclerThread();
@@ -1025,7 +1020,7 @@ static TmEcode FlowRecyclerThreadDeinit(ThreadVars *t, void *data)
 
 static void Recycler(ThreadVars *tv, FlowRecyclerThreadData *ftd, Flow *f)
 {
-    FLOWLOCK_WRLOCK(f);
+    SCLogNotice("FlowLock");
 
     (void)OutputFlowLog(tv, ftd->output_thread_data, f);
 
@@ -1036,7 +1031,6 @@ static void Recycler(ThreadVars *tv, FlowRecyclerThreadData *ftd, Flow *f)
     StatsDecr(tv, ftd->counter_flow_active);
 
     FlowClearMemory(f, f->protomap);
-    FLOWLOCK_UNLOCK(f);
 }
 
 extern uint32_t flow_spare_pool_block_size;

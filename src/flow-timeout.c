@@ -368,11 +368,11 @@ void FlowForceReassemblyForFlow(Flow *f)
  */
 static inline void FlowForceReassemblyForHash(void)
 {
+    SCLogNotice("FlowForceReassemblyForHash");
     for (uint32_t idx = 0; idx < flow_config.hash_size; idx++) {
         FlowBucket *fb = &flow_hash[idx];
 
         PacketPoolWaitForN(9);
-        FBLOCK_LOCK(fb);
 
         Flow *f = fb->head;
         Flow *prev_f = NULL;
@@ -382,13 +382,11 @@ static inline void FlowForceReassemblyForHash(void)
             Flow *next_f = f->next;
             PacketPoolWaitForN(3);
 
-            FLOWLOCK_WRLOCK(f);
 
             /* Get the tcp session for the flow */
             TcpSession *ssn = (TcpSession *)f->protoctx;
             /* \todo Also skip flows that shouldn't be inspected */
             if (ssn == NULL) {
-                FLOWLOCK_UNLOCK(f);
                 prev_f = f;
                 f = next_f;
                 continue;
@@ -400,18 +398,15 @@ static inline void FlowForceReassemblyForHash(void)
                 RemoveFromHash(f, prev_f);
                 f->flow_end_flags |= FLOW_END_FLAG_SHUTDOWN;
                 FlowForceReassemblyForFlow(f);
-                FLOWLOCK_UNLOCK(f);
                 f = next_f;
                 continue;
             }
 
-            FLOWLOCK_UNLOCK(f);
 
             /* next flow in the queue */
             prev_f = f;
             f = f->next;
         }
-        FBLOCK_UNLOCK(fb);
     }
     return;
 }

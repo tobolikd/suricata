@@ -42,5 +42,6 @@ typedef struct DPDKIfaceConfigAttributes_ {
 int RunModeIdsDpdkWorkers(void);
 void RunModeDpdkRegister(void);
 const char *RunModeDpdkGetDefaultMode(void);
+void InitEal(void);
 
 #endif /* __RUNMODE_DPDK_H__ */

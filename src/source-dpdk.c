@@ -42,6 +42,7 @@
 #include "tmqh-packetpool.h"
 #include "util-privs.h"
 #include "action-globals.h"
+#include "flow-private.h"
 
 #ifndef HAVE_DPDK
 
@@ -522,6 +523,9 @@ static TmEcode ReceiveDPDKThreadInit(ThreadVars *tv, const void *initdata, void 
 
     uint16_t queue_id = SC_ATOMIC_ADD(dpdk_config->queue_id, 1);
     SCLogNotice("initting thread %d", queue_id);
+    dpdk_flow_hash = dpdk_flow_hash_all[queue_id];
+    if (dpdk_flow_hash == NULL)
+        FatalError("Probably not enough flow tables created");
     ptv->queue_id = queue_id;
     // pass the pointer to the mempool and then forget about it. Mempool is freed in thread deinit.
     ptv->pkt_mempool = dpdk_config->pkt_mempool[ptv->queue_id];

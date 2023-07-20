@@ -181,7 +181,6 @@ static void CheckWorkQueue(ThreadVars *tv, FlowWorkerThreadData *fw, FlowTimeout
     uint32_t i = 0;
     Flow *f;
     while ((f = FlowQueuePrivateGetFromTop(fq)) != NULL) {
-        FLOWLOCK_WRLOCK(f);
         f->flow_end_flags |= FLOW_END_FLAG_TIMEOUT; //TODO emerg
 
         if (f->proto == IPPROTO_TCP) {
@@ -209,7 +208,6 @@ static void CheckWorkQueue(ThreadVars *tv, FlowWorkerThreadData *fw, FlowTimeout
         StatsDecr(tv, fw->dtv->counter_flow_active);
 
         FlowClearMemory (f, f->protomap);
-        FLOWLOCK_UNLOCK(f);
 
         if (fw->fls.spare_queue.len >= (flow_spare_pool_block_size * 2)) {
             FlowQueuePrivatePrependFlow(&ret_queue, f);
@@ -246,7 +244,6 @@ static inline TmEcode FlowUpdate(ThreadVars *tv, FlowWorkerThreadData *fw, Packe
             StatsAddUI64(tv, fw->both_bypass_bytes, GET_PKT_LEN(p));
             Flow *f = p->flow;
             FlowDeReference(&p->flow);
-            FLOWLOCK_UNLOCK(f);
             return TM_ECODE_DONE;
         }
 #endif
@@ -255,7 +252,6 @@ static inline TmEcode FlowUpdate(ThreadVars *tv, FlowWorkerThreadData *fw, Packe
             StatsAddUI64(tv, fw->local_bypass_bytes, GET_PKT_LEN(p));
             Flow *f = p->flow;
             FlowDeReference(&p->flow);
-            FLOWLOCK_UNLOCK(f);
             return TM_ECODE_DONE;
         }
         default:
@@ -583,7 +579,6 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
     /* if PKT_WANTS_FLOW is not set, but PKT_HAS_FLOW is, then this is a
      * pseudo packet created by the flow manager. */
     } else if (p->flags & PKT_HAS_FLOW) {
-        FLOWLOCK_WRLOCK(p->flow);
         DEBUG_VALIDATE_BUG_ON(p->pkt_src != PKT_SRC_FFR);
     }
 
@@ -674,7 +669,6 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
 
         Flow *f = p->flow;
         FlowDeReference(&p->flow);
-        FLOWLOCK_UNLOCK(f);
     }
 
 housekeeping:

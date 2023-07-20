@@ -308,6 +308,13 @@ typedef struct FlowKey_
     uint16_t vlan_id[VLAN_MAX_LAYERS];
 } FlowKey;
 
+typedef struct DPDKFlowKey_
+{
+    Address *src, *dst;
+    Port sp, dp;
+    uint8_t proto;
+}  __attribute__((aligned(CLS))) DPDKFlowKey;
+
 typedef struct FlowAddress_ {
     union {
         uint32_t       address_un_data32[4]; /* type-specific field */
@@ -489,7 +496,7 @@ typedef struct Flow_
     uint32_t tosrcpktcnt;
     uint64_t todstbytecnt;
     uint64_t tosrcbytecnt;
-} Flow;
+}  __attribute__((aligned(512))) Flow;
 
 enum FlowState {
     FLOW_STATE_NEW = 0,

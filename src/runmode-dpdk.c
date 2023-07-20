@@ -78,7 +78,6 @@ static void ArgumentsInit(struct Arguments *args, unsigned capacity);
 static void ArgumentsCleanup(struct Arguments *args);
 static void ArgumentsAdd(struct Arguments *args, char *value);
 static void ArgumentsAddOptionAndArgument(struct Arguments *args, const char *opt, const char *arg);
-static void InitEal(void);
 
 static void ConfigSetIface(DPDKIfaceConfig *iconf, const char *entry_str);
 static int ConfigSetThreads(DPDKIfaceConfig *iconf, const char *entry_str);
@@ -256,7 +255,7 @@ static void ArgumentsAddOptionAndArgument(struct Arguments *args, const char *op
     SCReturn;
 }
 
-static void InitEal(void)
+void InitEal(void)
 {
     SCEnter();
     int retval;
@@ -1648,7 +1647,6 @@ int RunModeIdsDpdkWorkers(void)
     RunModeInitialize();
     TimeModeSetLive();
 
-    InitEal();
     ret = RunModeSetLiveCaptureWorkers(ParseDpdkConfigAndConfigureDevice, DPDKConfigGetThreadsCount,
             "ReceiveDPDK", "DecodeDPDK", thread_name_workers, NULL);
     if (ret != 0) {

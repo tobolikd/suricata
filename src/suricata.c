@@ -142,6 +142,7 @@
 #include "util-signal.h"
 #include "util-time.h"
 #include "util-validate.h"
+#include "runmode-dpdk.h"
 
 #ifdef WINDIVERT
 #include "decode-sll.h"
@@ -2243,6 +2244,8 @@ void PreRunInit(const int runmode)
 #ifdef PROFILE_RULES
     SCProfilingInit();
 #endif
+
+
     DefragInit();
     FlowInitConfig(FLOW_QUIET);
     IPPairInitConfig(FLOW_QUIET);
@@ -2936,6 +2939,8 @@ int SuricataMain(int argc, char **argv)
         ConfDump();
         exit(EXIT_SUCCESS);
     }
+
+    InitEal();
 
     int tracking = 1;
     if (ConfGetBool("vlan.use-for-tracking", &tracking) == 1 && !tracking) {

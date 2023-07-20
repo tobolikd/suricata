@@ -26,6 +26,11 @@
 #include "suricata-common.h"
 #include "suricata.h"
 
+#include <rte_malloc.h>
+#include <rte_errno.h>
+#include <rte_table_hash_func.h>
+#include <rte_table_hash.h>
+
 #include "action-globals.h"
 #include "packet.h"
 #include "decode.h"
@@ -69,6 +74,12 @@
 
 #include "app-layer-parser.h"
 #include "app-layer-expectation.h"
+
+#include <rte_malloc.h>
+#include <rte_errno.h>
+#include <rte_table_hash_func.h>
+#include <rte_table_hash.h>
+
 
 #define FLOW_DEFAULT_EMERGENCY_RECOVERY 30
 
@@ -640,6 +651,54 @@ void FlowInitConfig(bool quiet)
                 SC_ATOMIC_GET(flow_config.memcap), hash_size, (uintmax_t)sizeof(FlowBucket));
         exit(EXIT_FAILURE);
     }
+
+    uint32_t key_size = sizeof(DPDKFlowKey);
+    uint32_t elm_size = sizeof(Flow);
+    uint32_t elms_per_bkt = RTE_MAX(4, 1u);
+    uint32_t bkts = flow_config.hash_size / elms_per_bkt;
+    struct rte_table_hash_params params = {
+        .name = "FLOWTABLE",
+        .key_size = key_size,
+        .key_offset = 0,
+        .key_mask = NULL,
+        .n_keys = bkts * elms_per_bkt,
+        .n_buckets = bkts,
+        .f_hash = rte_table_hash_crc_key64,
+        .seed = 0x6d5a6d5a6d5a6d5a, // irrelevant, this will not hash the same as Toeplitz
+    };
+
+    bt_ops = rte_table_hash_ext_ops;
+    SCLogNotice("Flow table params: "
+                "name - %s  "
+                "key size - %u "
+                "key offset - %u "
+                "key_mask - %p "
+                "nkeys - %u "
+                "n_buckets - %u "
+                "f_hash - %p "
+                "seed - %lu",
+            params.name,
+            params.key_size,
+            params.key_offset,
+            params.key_mask,
+            params.n_keys,
+            params.n_buckets,
+            params.f_hash,
+            params.seed
+    );
+    SCLogNotice("Socket id %d elmsz %u elmsz %s power of 2", (int)rte_socket_id(), elm_size, rte_is_power_of_2(elm_size) ? "is" : "IS NOT!!!!");
+
+    for (int i = 0; i < (sizeof(dpdk_flow_hash_all)/sizeof (dpdk_flow_hash_all[i])); i++) {
+        dpdk_flow_hash_all[i] = NULL;
+    }
+    for (int i = 0; i < MAX_FLOW_TABLES; i++) {
+        dpdk_flow_hash_all[i] = bt_ops.f_create(&params, (int)rte_socket_id(), elm_size);
+        if (dpdk_flow_hash_all[i] == NULL) {
+            FatalError("Error (%s): Failed to create bypass hash table", rte_strerror(rte_errno));
+        }
+    }
+
+
     flow_hash = SCMallocAligned(flow_config.hash_size * sizeof(FlowBucket), CLS);
     if (unlikely(flow_hash == NULL)) {
         FatalError("Fatal error encountered in FlowInitConfig. Exiting...");
@@ -1196,7 +1255,7 @@ void FlowUpdateState(Flow *f, const enum FlowState s)
 #endif
         /* and reset the flow bucket next_ts value so that the flow manager
          * has to revisit this row */
-        SC_ATOMIC_SET(f->fb->next_ts, 0);
+//        SC_ATOMIC_SET(f->fb->next_ts, 0);
 #ifdef UNITTESTS
     }
 #endif
