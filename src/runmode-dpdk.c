@@ -1569,13 +1569,13 @@ static bool DeviceRingNameIsValid(const char *name, uint16_t rings_cnt)
     return true;
 }
 
-static struct PFConfRingEntry *DeviceRingsFindPFConfRingEntry(const char *memzone_name, const char *rx_ring_name)
+static struct PFConfRingEntry *DeviceRingsFindPFConfRingEntry(const char *mz_name, const char *rx_ring_name)
 {
     const struct rte_memzone *mz = NULL;
     struct PFConf *pf_conf;
     struct PFConfRingEntry *pf_re;
 
-    mz = rte_memzone_lookup(memzone_name);
+    mz = rte_memzone_lookup(mz_name);
     if (mz == NULL) {
         FatalError("Error (%s): Memzone not found", rte_strerror(rte_errno));
     }
@@ -1593,7 +1593,7 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
 {
     SCEnter();
     uint16_t rings_cnt = iconf->threads;
-    struct PFConfRingEntry *pf_re;
+    struct PFConfRingEntry *pf_re = NULL;
     int retval;
 
     if (!DeviceRingNameIsValid(iconf->iface, rings_cnt))
