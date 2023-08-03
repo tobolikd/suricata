@@ -38,8 +38,8 @@ void DpdkIpcDumpStats(void);
 void DpdkIpcDetach(void);
 
 #ifdef HAVE_DPDK
-
 #define IPC_VALID_RESPONSE "ok"
+<<<<<<< HEAD
 
 #define IPC_ACTION_ATTACH                "attach"
 #define IPC_ACTION_DETACH                "detach"
@@ -48,8 +48,18 @@ void DpdkIpcDetach(void);
 #define IPC_ACTION_SHUTDOWN              "shutdown"
 #define IPC_ACTION_BYPASS_TBL_DUMP_START "bt_dump_start"
 #define IPC_ACTION_BYPASS_TBL_DUMP_STOP  "bt_dump_stop"
+        =======
+#define IPC_ACTION_ATTACH                "attach"
+#define IPC_ACTION_DETACH                "detach"
+#define IPC_ACTION_START                 "pkts_start"
+#define IPC_ACTION_STOP                  "pkts_stop"
+#define IPC_ACTION_SHUTDOWN              "shutdown"
+#define IPC_ACTION_BYPASS_TBL_DUMP_START "bt_dump_start"
+#define IPC_ACTION_BYPASS_TBL_DUMP_STOP  "bt_dump_stop"
+#define IPC_ACTION_OFFLOADS_SETUP        "offloads_setup"
+        >>>>>>> 92824ce4a (dpdk: add metadata support to DPDK Prefilter)
 
-struct IPCResponseAttach {
+        struct IPCResponseAttach {
     uint32_t app_id;
     char memzone_name[RTE_MEMZONE_NAMESIZE];
 };
