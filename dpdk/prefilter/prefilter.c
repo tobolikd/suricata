@@ -299,10 +299,6 @@ static int IPCActionBtDumpStop(const struct rte_mp_msg *msg, const void *peer)
     return 0;
 }
 
-<<<<<<< HEAD
-static int IPCInit(struct action_control *actions,
-        struct ctx_ring_conf_list_entry_resource *ring_conf_entries, uint16_t ring_conf_entries_cnt)
-=======
 static int IPCSetupOffloads(const struct rte_mp_msg *msg, const void *peer)
 {
     int ret;
@@ -342,7 +338,6 @@ static int IPCSetupOffloads(const struct rte_mp_msg *msg, const void *peer)
 
 static int IPCInit(struct action_control *actions,
         struct ctx_ring_conf_list_entry_resource *ring_conf_entries, uint16_t ring_conf_entries_cnt)
->>>>>>> 92824ce4a (dpdk: add metadata support to DPDK Prefilter)
 {
     int ret;
     ret = rte_mp_action_register(IPC_ACTION_ATTACH, IPCActionAttach);
