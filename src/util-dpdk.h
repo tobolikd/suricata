@@ -25,6 +25,7 @@
 #define UTIL_DPDK_H
 
 #include "autoconf.h"
+#include <suricata/util-dpdk-detect.h>
 
 #ifdef HAVE_DPDK
 
@@ -217,6 +218,7 @@ typedef struct MetadataToSuri {
     metadata_tcp_t metadata_tcp;
     metadata_udp_t metadata_udp;
     PacketEngineEvents events;
+    metadata_detect_t metadata_detect;
 } metadata_to_suri_t;
 
 typedef struct MetadataToSuriHelp {

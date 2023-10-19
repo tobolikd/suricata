@@ -22,6 +22,7 @@
  *
  */
 
+#include "metadata-http.h"
 #include "metadata-l3-ipv4.h"
 #include "metadata-l3-ipv6.h"
 #include "metadata-l4-tcp.h"

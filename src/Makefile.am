@@ -529,6 +529,7 @@ noinst_HEADERS = \
 	util-device.h \
 	util-dpdk.h \
 	util-dpdk-bypass.h \
+	util-dpdk-detect.h \
 	util-dpdk-i40e.h \
 	util-dpdk-ice.h \
 	util-dpdk-ixgbe.h \

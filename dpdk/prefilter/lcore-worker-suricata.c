@@ -21,6 +21,7 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
+#include "metadata-http.h"
 #define PCRE2_CODE_UNIT_WIDTH 8
 #define _POSIX_C_SOURCE       200809L
 #define _DEFAULT_SOURCE       1 // for time.h
@@ -904,6 +905,9 @@ static void SetMetadataToMbuf(
                     break;
             }
         }
+
+        if (true) // TODO*
+            MetadataDetectPacketHTTP(packets_buffer->buf[j], metadata_to_suri);
     }
 }
 
