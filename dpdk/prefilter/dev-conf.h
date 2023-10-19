@@ -25,7 +25,7 @@
 #define DEV_CONF_H
 
 #include <sys/queue.h>
-#include <stdint-gcc.h>
+#include <stdint.h>
 
 #include "prefilter.h"
 

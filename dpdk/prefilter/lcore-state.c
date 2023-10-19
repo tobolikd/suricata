@@ -21,7 +21,7 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
-#include <stdint-gcc.h>
+#include <stdint.h>
 #include <sys/queue.h>
 #include <rte_launch.h>
 #include <rte_lcore.h>

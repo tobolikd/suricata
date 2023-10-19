@@ -24,7 +24,7 @@
 #define _DEFAULT_SOURCE 1 // for time.h
 #define __rtems__       1 // for time.h
 #define __USE_MISC      1 // for time.h
-#include <stdint-gcc.h>
+#include <stdint.h>
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <rte_launch.h>

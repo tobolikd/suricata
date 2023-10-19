@@ -24,7 +24,7 @@
 #ifndef LCORE_WORKER_H
 #define LCORE_WORKER_H
 
-#include <stdint-gcc.h>
+#include <stdint.h>
 #include "dev-conf.h"
 #include "stats.h"
 

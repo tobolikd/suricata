@@ -24,7 +24,7 @@
 #ifndef DEV_CONF_SURICATA_H
 #define DEV_CONF_SURICATA_H
 
-#include <stdint-gcc.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 #include <rte_ring.h>
