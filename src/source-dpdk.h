@@ -25,6 +25,7 @@
 #define __SOURCE_DPDK_H__
 
 #include "suricata-common.h"
+#include <stdint.h>
 
 #ifdef HAVE_DPDK
 #include <rte_ethdev.h>
@@ -53,6 +54,7 @@ typedef struct DPDKPacketVars_ {
     uint8_t copy_mode;
     uint16_t PF_l4_len;
     uint8_t metadata_flags;
+    uint8_t detect_flags;
     struct rte_ring *tx_ring; // pkt is sent to this ring (same as out_port_*)
     struct rte_ring *tasks_ring;    // in case we want to bypass the packet
     struct rte_mempool *message_mp; // get message object for the bypass message

@@ -22,6 +22,7 @@
  *
  */
 
+#include "prefilter-util-mpm-hs.h"
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE 1  // for time.h
 #define __rtems__       1  // for time.h
@@ -437,6 +438,10 @@ int main(int argc, char *argv[])
         goto cleanup;
 
     Log().info("Message init done");
+
+    // TMP
+    MpmHSRegisterPrefilter();
+    Log().info("Mpm setup done");
 
     ret = DevConfSharedConfInit();
     if (ret != 0)

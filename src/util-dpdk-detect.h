@@ -1,7 +1,14 @@
 #ifndef UTIL_DPDK_DETECT_H
 #define UTIL_DPDK_DETECT_H
 
+#include "suricata-common.h"
 #include <stdint.h>
+
+enum DetectMetadataFlags {
+    NO_DETECT_FLAG = BIT_U8(0),
+    BRIEF_DETECT_FLAG = BIT_U8(1),
+    FULL_DETECT_FLAG = BIT_U8(2),
+};
 
 typedef struct MetadataDetectIpv4hdr {
     uint8_t data;
