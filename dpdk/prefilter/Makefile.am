@@ -20,7 +20,8 @@ SRCS = \
     metadata-l3-ipv4.c \
     metadata-l3-ipv6.c \
     metadata-l4-udp.c \
-    metadata-l4-tcp.c
+    metadata-l4-tcp.c \
+	hs-prefilter.c
 
 OBJS = \
     prefilter.o \
@@ -38,7 +39,8 @@ OBJS = \
     metadata-l3-ipv4.o \
     metadata-l3-ipv6.o \
     metadata-l4-udp.o \
-    metadata-l4-tcp.o
+    metadata-l4-tcp.o \
+	hs-prefilter.o
 
 all:
 	if [ $$test -e $(CONFIGURE_PREFIX)/lib/libsuricata.so ] \

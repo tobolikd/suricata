@@ -46,6 +46,11 @@
 #include "runmode-dpdk.h"
 #include "source-dpdk.h"
 
+#ifdef BUILD_HYPERSCAN
+#include <hs/hs.h>
+#include <hs/hs_runtime.h>
+#endif
+
 #include "flow.h"
 
 #define BURST_SIZE 32
@@ -75,6 +80,9 @@ struct lcore_values {
     uint16_t idxes_offlds_suri_requested[MAX_CNT_OFFLOADS];
     uint16_t cnt_offlds_suri_support;
     uint16_t idxes_offlds_suri_support[MAX_CNT_OFFLOADS];
+#ifdef BUILD_HYPERSCAN
+    hs_scratch_t *hs_scratch_space;
+#endif
     struct rte_table_hash *bt; // bypass table
     ring_buffer *tmp_ring_bufs;
     FlowKeyExtended fke_arr;

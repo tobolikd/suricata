@@ -43,6 +43,10 @@
 #include "lcore-worker.h"
 #include "stats.h"
 
+#ifdef BUILD_HYPERSCAN
+#include "hs-prefilter.h"
+#endif
+
 struct prefilter_args {
     char *conf_path;
     LogLevelEnum log_lvl;
@@ -437,6 +441,14 @@ int main(int argc, char *argv[])
         goto cleanup;
 
     Log().info("Message init done");
+
+#ifdef BUILD_HYPERSCAN
+    ret = DevConfHSInit();
+    if (ret != 0)
+        goto cleanup;
+
+    Log().info("Hyperscan DB compilation done");
+#endif
 
     ret = DevConfSharedConfInit();
     if (ret != 0)

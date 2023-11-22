@@ -37,8 +37,11 @@
 #include <rte_mempool.h>
 #include <rte_hash.h>
 
-#include "dev-conf.h"
 #include "hash-table-bypass.h"
+
+#ifdef BUILD_HYPERSCAN
+#include <hs/hs_common.h>
+#endif
 
 #define PREFILTER_CONF_MEMZONE_NAME "prefilter_conf"
 
@@ -96,6 +99,9 @@ struct ctx_global_resource {
     struct pf_stats *app_stats;
     struct app_control status;
     const struct rte_memzone *shared_conf;
+#ifdef BUILD_HYPERSCAN
+    struct hs_database *hs_database;
+#endif
 };
 
 #endif // SURICATA_PREFILTER_H

@@ -55,6 +55,10 @@
 #include "source-dpdk.h"
 #include "metadata.h"
 
+#ifdef BUILD_HYPERSCAN
+#include "hs-prefilter.h"
+#endif
+
 // The flag is used to set mbuf offload flags
 // Prefilter receives from 2 NICs but aggregates the traffic into a single DPDK ring
 // This flag notes, from which NIC it was received, so the other NIC is for transmitting the packet.
@@ -625,6 +629,16 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
     for (int i = 0; i < BURST_SIZE * 2; i++) {
         lv->fk_arr[i] = &lv->fke_arr.fk[i];
     }
+
+#ifdef BUILD_HYPERSCAN
+    lv->hs_scratch_space = DevConfHSAllocScratch();
+
+    if (lv->hs_scratch_space == NULL) {
+        Log().error(EINVAL,"Failed to allocate memory for scratch space");
+        return NULL;
+    }
+#endif // BUILD_HYPERSCAN
+
 
     lv->state = init_vals->state;
     lv->bt = init_vals->bypass_table;
