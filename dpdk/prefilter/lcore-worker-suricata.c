@@ -634,11 +634,10 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
     lv->hs_scratch_space = DevConfHSAllocScratch();
 
     if (lv->hs_scratch_space == NULL) {
-        Log().error(EINVAL,"Failed to allocate memory for scratch space");
+        Log().error(EINVAL, "Failed to allocate memory for scratch space");
         return NULL;
     }
 #endif // BUILD_HYPERSCAN
-
 
     lv->state = init_vals->state;
     lv->bt = init_vals->bypass_table;
@@ -1252,6 +1251,12 @@ void ThreadSuricataStatsExit(struct lcore_values *lv, struct pf_stats *stats)
 
 void ThreadSuricataDeinit(struct lcore_init *vals, struct lcore_values *lv)
 {
+#ifdef BUILD_HYPERSCAN
+    if (lv->hs_scratch_space != NULL) {
+        rte_free(lv->hs_scratch_space);
+        lv->hs_scratch_space = NULL;
+    }
+#endif
     if (vals != NULL)
         rte_free(vals);
     if (lv != NULL) {

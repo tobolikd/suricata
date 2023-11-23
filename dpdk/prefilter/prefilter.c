@@ -22,6 +22,7 @@
  *
  */
 
+#include <hs/hs_common.h>
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE 1  // for time.h
 #define __rtems__       1  // for time.h
@@ -537,6 +538,13 @@ cleanup:
         Log().debug("Freeing the shared configuration");
         rte_memzone_free(ctx.shared_conf);
     }
+
+#ifdef BUILD_HYPERSCAN
+    if (ctx.hs_database != NULL) {
+        hs_free_database(ctx.hs_database);
+        ctx.hs_database = NULL;
+    }
+#endif
 
     PFStatsDeinit(ctx.app_stats);
     DevConfDeinit();
