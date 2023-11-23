@@ -9,6 +9,7 @@
 #include "hs-prefilter.h"
 #include "prefilter.h"
 #include "util-debug.h"
+#include "util-dpdk.h"
 #include "rte_malloc.h"
 
 /**
@@ -66,10 +67,23 @@ error:
     return NULL;
 }
 
+int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long long to,
+        unsigned int flags, void *context)
+{
+    metadata_to_suri_t *metadata_to_suri = (metadata_to_suri_t *)context;
+    metadata_to_suri->detect_flags |= PREFILTER_DETECT_FLAG_MATCH;
+    return 0;
+}
+
 void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space)
 {
-    hs_scan(ctx.hs_database, (char *)packet_buff->buf, packet_buff->len, 0, scratch_space, NULL,
-            NULL);
+    for (int i = 0; i < packet_buff->len; i++) {
+        metadata_to_suri_t *metadata_to_suri =
+                (metadata_to_suri_t *)rte_mbuf_to_priv(packet_buff->buf[i]);
+        metadata_to_suri->detect_flags = PREFILTER_DETECT_FLAG_RAN;
+        hs_scan(ctx.hs_database, (char *)packet_buff->buf[i], packet_buff->len, 0, scratch_space,
+                MatchEventPrefilter, &metadata_to_suri);
+    }
 }
 
 #endif // BUILD_HYPERSCAN

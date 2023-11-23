@@ -220,6 +220,7 @@ typedef struct MetadataToSuri {
     metadata_tcp_t metadata_tcp;
     metadata_udp_t metadata_udp;
     PacketEngineEvents events;
+    uint8_t detect_flags; // TMP* add BUILD_HYPERSCAN?? (build failed)
 } metadata_to_suri_t;
 
 typedef struct MetadataToSuriHelp {

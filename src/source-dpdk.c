@@ -778,6 +778,12 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
                         break;
                 }
             }
+
+#ifdef BUILD_HYPERSCAN
+            p->dpdk_v.detect_flags = metadata->detect_flags;
+#endif // BUILD_HYPERSCAN
+
+
 #endif /* BUILD_DPDK_APPS */
             PacketSetData(p, rte_pktmbuf_mtod(p->dpdk_v.mbuf, uint8_t *),
                     rte_pktmbuf_pkt_len(p->dpdk_v.mbuf));
