@@ -59,10 +59,17 @@ hs_scratch_t *DevConfHSAllocScratch()
         goto error;
     }
 
+    // TODO* use hs_clone_scratch instead
     hs_error_t err = hs_alloc_scratch(ctx.hs_database, &scratch_space);
 
 error:
     return NULL;
+}
+
+void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space)
+{
+    hs_scan(ctx.hs_database, (char *)packet_buff->buf, packet_buff->len, 0, scratch_space, NULL,
+            NULL);
 }
 
 #endif // BUILD_HYPERSCAN

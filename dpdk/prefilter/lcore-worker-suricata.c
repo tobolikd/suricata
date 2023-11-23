@@ -938,6 +938,11 @@ static void PktsEnqueue(struct lcore_values *lv)
                     lv->idxes_offlds_suri_requested);
         }
 
+        // TMP*
+#ifdef BUILD_HYPERSCAN
+        HSSearch(&lv->tmp_ring_bufs[i], lv->hs_scratch_space);
+#endif
+
         pkt_count = rte_ring_enqueue_burst(lv->rings_from_pf[i], (void **)lv->tmp_ring_bufs[i].buf,
                 lv->tmp_ring_bufs[i].len, NULL);
         lv->stats.pkts_to_ring_enq_success[stats_index] += pkt_count;

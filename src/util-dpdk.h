@@ -52,7 +52,7 @@
 
 #define PREFILTER_CONF_MEMZONE_NAME "prefilter_conf"
 #define BURST_SIZE                  32
-#define RSS_HKEY_LEN 40
+#define RSS_HKEY_LEN                40
 
 #if RTE_VERSION < RTE_VERSION_NUM(22, 0, 0, 0)
 #define RTE_ETH_MQ_RX_RSS ETH_MQ_RX_RSS
@@ -80,7 +80,7 @@
 #define RTE_ETH_RX_OFFLOAD_KEEP_CRC         DEV_RX_OFFLOAD_KEEP_CRC
 #define RTE_ETH_RX_OFFLOAD_SCTP_CKSUM       DEV_RX_OFFLOAD_SCTP_CKSUM
 #define RTE_ETH_RX_OFFLOAD_OUTER_UDP_CKSUM  DEV_RX_OFFLOAD_OUTER_UDP_CKSUM
-#define RTE_ETH_RX_OFFLOAD_RSS_HASH DEV_RX_OFFLOAD_RSS_HASH
+#define RTE_ETH_RX_OFFLOAD_RSS_HASH         DEV_RX_OFFLOAD_RSS_HASH
 #define RTE_MBUF_F_FIRST_FREE               PKT_FIRST_FREE
 
 #define RTE_ETH_MQ_TX_NONE ETH_MQ_TX_NONE
@@ -149,6 +149,9 @@ enum ofldsIdxsSur { MATCH_RULES };
 #define IPV6_OFFLOAD(val) ((val) << IPV6_ID)
 #define TCP_OFFLOAD(val)  ((val) << TCP_ID)
 #define UDP_OFFLOAD(val)  ((val) << UDP_ID)
+
+#define PREFILTER_DETECT_FLAG_RAN   (1 << 0)
+#define PREFILTER_DETECT_FLAG_MATCH (1 << 1)
 
 #define MATCH_RULES_OFFLOAD(val) ((val) << MATCH_RULES)
 
