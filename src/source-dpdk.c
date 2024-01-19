@@ -599,8 +599,10 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
     TmThreadsSetFlag(tv, THV_RUNNING);
     PacketPoolWait();
 
-    rte_eth_stats_reset(ptv->port_id);
-    rte_eth_xstats_reset(ptv->port_id);
+    if (ptv->op_mode == DPDK_ETHDEV_MODE) {
+        rte_eth_stats_reset(ptv->port_id);
+        rte_eth_xstats_reset(ptv->port_id);
+    }
     while (1) {
         if (unlikely(suricata_ctl_flags != 0)) {
             // do not stop until you clean the ring in the secondary mode
