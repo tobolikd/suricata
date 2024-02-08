@@ -76,16 +76,16 @@ void DetectTlsJa3SStringRegister(void)
     sigmatch_table[DETECT_AL_TLS_JA3S_STRING].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_AL_TLS_JA3S_STRING].flags |= SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2("ja3s.string", ALPROTO_TLS, SIG_FLAG_TOCLIENT, 0,
+    DetectAppLayerInspectEngineRegister("ja3s.string", ALPROTO_TLS, SIG_FLAG_TOCLIENT, 0,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2("ja3s.string", SIG_FLAG_TOCLIENT, 2,
-            PrefilterGenericMpmRegister, GetData, ALPROTO_TLS, 0);
+    DetectAppLayerMpmRegister("ja3s.string", SIG_FLAG_TOCLIENT, 2, PrefilterGenericMpmRegister,
+            GetData, ALPROTO_TLS, 0);
 
-    DetectAppLayerMpmRegister2("ja3s.string", SIG_FLAG_TOCLIENT, 2, PrefilterGenericMpmRegister,
+    DetectAppLayerMpmRegister("ja3s.string", SIG_FLAG_TOCLIENT, 2, PrefilterGenericMpmRegister,
             Ja3DetectGetString, ALPROTO_QUIC, 1);
 
-    DetectAppLayerInspectEngineRegister2("ja3s.string", ALPROTO_QUIC, SIG_FLAG_TOCLIENT, 1,
+    DetectAppLayerInspectEngineRegister("ja3s.string", ALPROTO_QUIC, SIG_FLAG_TOCLIENT, 1,
             DetectEngineInspectBufferGeneric, Ja3DetectGetString);
 
     DetectBufferTypeSetDescriptionByName("ja3s.string", "TLS JA3S string");

@@ -22,7 +22,6 @@
  *
  */
 
-#include <hs/hs_common.h>
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE 1  // for time.h
 #define __rtems__       1  // for time.h

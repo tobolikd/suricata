@@ -96,13 +96,11 @@ void DetectRfbNameRegister(void)
     sigmatch_table[DETECT_AL_RFB_NAME].Setup = DetectRfbNameSetup;
     sigmatch_table[DETECT_AL_RFB_NAME].flags |= SIGMATCH_NOOPT|SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2(BUFFER_NAME, ALPROTO_RFB,
-            SIG_FLAG_TOCLIENT, 1,
+    DetectAppLayerInspectEngineRegister(BUFFER_NAME, ALPROTO_RFB, SIG_FLAG_TOCLIENT, 1,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOCLIENT, 1,
-            PrefilterGenericMpmRegister, GetData, ALPROTO_RFB,
-            1);
+    DetectAppLayerMpmRegister(BUFFER_NAME, SIG_FLAG_TOCLIENT, 1, PrefilterGenericMpmRegister,
+            GetData, ALPROTO_RFB, 1);
 
     DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);
 

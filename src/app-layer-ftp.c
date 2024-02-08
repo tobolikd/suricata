@@ -277,7 +277,7 @@ static void FTPLocalStorageFree(void *ptr)
         }
 
         if (td->ftp_mpm_thread_ctx != NULL) {
-            mpm_table[FTP_MPM].DestroyThreadCtx(ftp_mpm_ctx, td->ftp_mpm_thread_ctx);
+            MpmDestroyThreadCtx(td->ftp_mpm_thread_ctx, FTP_MPM);
             SCFree(td->ftp_mpm_thread_ctx);
         }
 
@@ -1216,11 +1216,10 @@ static AppLayerGetFileState FTPDataStateGetTxFiles(void *_state, void *tx, uint8
 
 static void FTPSetMpmState(void)
 {
-    ftp_mpm_ctx = SCMalloc(sizeof(MpmCtx));
+    ftp_mpm_ctx = SCCalloc(1, sizeof(MpmCtx));
     if (unlikely(ftp_mpm_ctx == NULL)) {
         exit(EXIT_FAILURE);
     }
-    memset(ftp_mpm_ctx, 0, sizeof(MpmCtx));
     MpmInitCtx(ftp_mpm_ctx, FTP_MPM);
 
     uint32_t i = 0;
@@ -1405,13 +1404,10 @@ uint16_t JsonGetNextLineFromBuffer(const char *buffer, const uint16_t len)
     return c == NULL ? len : (uint16_t)(c - buffer + 1);
 }
 
-void EveFTPDataAddMetadata(const Flow *f, JsonBuilder *jb)
+bool EveFTPDataAddMetadata(void *vtx, JsonBuilder *jb)
 {
-    const FtpDataState *ftp_state = NULL;
-    if (f->alstate == NULL)
-        return;
-
-    ftp_state = (FtpDataState *)f->alstate;
+    const FtpDataState *ftp_state = (FtpDataState *)vtx;
+    jb_open_object(jb, "ftp_data");
 
     if (ftp_state->file_name) {
         jb_set_string_from_bytes(jb, "filename", ftp_state->file_name, ftp_state->file_len);
@@ -1426,6 +1422,8 @@ void EveFTPDataAddMetadata(const Flow *f, JsonBuilder *jb)
         default:
             break;
     }
+    jb_close(jb);
+    return true;
 }
 
 /**

@@ -179,12 +179,11 @@ static DetectSshVersionData *DetectSshVersionParse (DetectEngineCtx *de_ctx, con
         }
 
         /* We have a correct id option */
-        ssh = SCMalloc(sizeof(DetectSshVersionData));
+        ssh = SCCalloc(1, sizeof(DetectSshVersionData));
         if (unlikely(ssh == NULL)) {
             pcre2_substring_free((PCRE2_UCHAR *)str_ptr);
             goto error;
         }
-        memset(ssh, 0x00, sizeof(DetectSshVersionData));
 
         /* If we expect a protocol version 2 or 1.99 (considered 2, we
          * will compare it with both strings) */
@@ -233,7 +232,6 @@ error:
 static int DetectSshVersionSetup (DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     DetectSshVersionData *ssh = NULL;
-    SigMatch *sm = NULL;
 
     if (DetectSignatureSetAppProto(s, ALPROTO_SSH) != 0)
         return -1;
@@ -244,21 +242,16 @@ static int DetectSshVersionSetup (DetectEngineCtx *de_ctx, Signature *s, const c
 
     /* Okay so far so good, lets get this into a SigMatch
      * and put it in the Signature. */
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_AL_SSH_PROTOVERSION, (SigMatchCtx *)ssh,
+                g_ssh_banner_list_id) == NULL) {
         goto error;
-
-    sm->type = DETECT_AL_SSH_PROTOVERSION;
-    sm->ctx = (void *)ssh;
-
-    SigMatchAppendSMToList(s, sm, g_ssh_banner_list_id);
+    }
     return 0;
 
 error:
     if (ssh != NULL)
         DetectSshVersionFree(de_ctx, ssh);
-    if (sm != NULL)
-        SCFree(sm);
     return -1;
 
 }
@@ -286,12 +279,11 @@ static int DetectSshVersionTestParse01 (void)
 {
     DetectSshVersionData *ssh = NULL;
     ssh = DetectSshVersionParse(NULL, "1.0");
-    if (ssh != NULL && strncmp((char *) ssh->ver, "1.0", 3) == 0) {
-        DetectSshVersionFree(NULL, ssh);
-        return 1;
-    }
+    FAIL_IF_NULL(ssh);
+    FAIL_IF_NOT(strncmp((char *)ssh->ver, "1.0", 3) == 0);
+    DetectSshVersionFree(NULL, ssh);
 
-    return 0;
+    PASS;
 }
 
 /**
@@ -302,12 +294,10 @@ static int DetectSshVersionTestParse02 (void)
 {
     DetectSshVersionData *ssh = NULL;
     ssh = DetectSshVersionParse(NULL, "2_compat");
-    if (ssh->flags & SSH_FLAG_PROTOVERSION_2_COMPAT) {
-        DetectSshVersionFree(NULL, ssh);
-        return 1;
-    }
+    FAIL_IF_NOT(ssh->flags & SSH_FLAG_PROTOVERSION_2_COMPAT);
+    DetectSshVersionFree(NULL, ssh);
 
-    return 0;
+    PASS;
 }
 
 /**
@@ -318,27 +308,15 @@ static int DetectSshVersionTestParse03 (void)
 {
     DetectSshVersionData *ssh = NULL;
     ssh = DetectSshVersionParse(NULL, "2_com");
-    if (ssh != NULL) {
-        DetectSshVersionFree(NULL, ssh);
-        return 0;
-    }
+    FAIL_IF_NOT_NULL(ssh);
     ssh = DetectSshVersionParse(NULL, "");
-    if (ssh != NULL) {
-        DetectSshVersionFree(NULL, ssh);
-        return 0;
-    }
+    FAIL_IF_NOT_NULL(ssh);
     ssh = DetectSshVersionParse(NULL, ".1");
-    if (ssh != NULL) {
-        DetectSshVersionFree(NULL, ssh);
-        return 0;
-    }
+    FAIL_IF_NOT_NULL(ssh);
     ssh = DetectSshVersionParse(NULL, "lalala");
-    if (ssh != NULL) {
-        DetectSshVersionFree(NULL, ssh);
-        return 0;
-    }
+    FAIL_IF_NOT_NULL(ssh);
 
-    return 1;
+    PASS;
 }
 
 

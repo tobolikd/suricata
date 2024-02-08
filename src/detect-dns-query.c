@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2018 Open Information Security Foundation
+/* Copyright (C) 2013-2023 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -87,11 +87,12 @@ static InspectionBuffer *DnsQueryGetData(DetectEngineThreadCtx *det_ctx,
 
     const uint8_t *data;
     uint32_t data_len;
-    if (rs_dns_tx_get_query_name(cbdata->txv, cbdata->local_id, &data, &data_len) == 0) {
+    if (SCDnsTxGetQueryName(cbdata->txv, false, cbdata->local_id, &data, &data_len) == 0) {
         InspectionBufferSetupMultiEmpty(buffer);
         return NULL;
     }
     InspectionBufferSetupMulti(buffer, transforms, data, data_len);
+    buffer->flags = DETECT_CI_FLAGS_SINGLE;
 
     SCReturnPtr(buffer, "InspectionBuffer");
 }
@@ -114,17 +115,9 @@ static uint8_t DetectEngineInspectDnsQuery(DetectEngineCtx *de_ctx, DetectEngine
         if (buffer == NULL || buffer->inspect == NULL)
             break;
 
-        det_ctx->buffer_offset = 0;
-        det_ctx->discontinue_matching = 0;
-        det_ctx->inspection_recursion_counter = 0;
-
-        const int match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd,
-                                              NULL, f,
-                                              (uint8_t *)buffer->inspect,
-                                              buffer->inspect_len,
-                                              buffer->inspect_offset, DETECT_CI_FLAGS_SINGLE,
-                                              DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-        if (match == 1) {
+        const bool match = DetectEngineContentInspectionBuffer(de_ctx, det_ctx, s, engine->smd,
+                NULL, f, buffer, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
+        if (match) {
             return DETECT_ENGINE_INSPECT_SIG_MATCH;
         }
         local_id++;
@@ -165,9 +158,8 @@ static void PrefilterTxDnsQuery(DetectEngineThreadCtx *det_ctx, const void *pect
             break;
 
         if (buffer->inspect_len >= mpm_ctx->minlen) {
-            (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx,
-                    &det_ctx->mtcu, &det_ctx->pmq,
-                    buffer->inspect, buffer->inspect_len);
+            (void)mpm_table[mpm_ctx->mpm_type].Search(
+                    mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
             PREFILTER_PROFILING_ADD_BYTES(det_ctx, buffer->inspect_len);
         }
 
@@ -211,13 +203,11 @@ void DetectDnsQueryRegister (void)
     sigmatch_table[DETECT_AL_DNS_QUERY].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_AL_DNS_QUERY].flags |= SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerMpmRegister2("dns_query", SIG_FLAG_TOSERVER, 2,
-            PrefilterMpmDnsQueryRegister, NULL,
-            ALPROTO_DNS, 1);
+    DetectAppLayerMpmRegister(
+            "dns_query", SIG_FLAG_TOSERVER, 2, PrefilterMpmDnsQueryRegister, NULL, ALPROTO_DNS, 1);
 
-    DetectAppLayerInspectEngineRegister2("dns_query",
-            ALPROTO_DNS, SIG_FLAG_TOSERVER, 1,
-            DetectEngineInspectDnsQuery, NULL);
+    DetectAppLayerInspectEngineRegister(
+            "dns_query", ALPROTO_DNS, SIG_FLAG_TOSERVER, 1, DetectEngineInspectDnsQuery, NULL);
 
     DetectBufferTypeSetDescriptionByName("dns_query",
             "dns request query");
@@ -227,9 +217,9 @@ void DetectDnsQueryRegister (void)
 
 #ifdef HAVE_LUA
     /* register these generic engines from here for now */
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "dns_request", ALPROTO_DNS, SIG_FLAG_TOSERVER, 1, DetectEngineInspectGenericList, NULL);
-    DetectAppLayerInspectEngineRegister2("dns_response", ALPROTO_DNS, SIG_FLAG_TOCLIENT, 1,
+    DetectAppLayerInspectEngineRegister("dns_response", ALPROTO_DNS, SIG_FLAG_TOCLIENT, 1,
             DetectEngineInspectGenericList, NULL);
 
     DetectBufferTypeSetDescriptionByName("dns_request",

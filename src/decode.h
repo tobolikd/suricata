@@ -219,9 +219,9 @@ typedef struct Address_ {
 #define GET_TCP_SRC_PORT(p)  ((p)->sp)
 #define GET_TCP_DST_PORT(p)  ((p)->dp)
 
-#define GET_PKT_LEN(p) ((p)->pktlen)
-#define GET_PKT_DATA(p) ((((p)->ext_pkt) == NULL ) ? (uint8_t *)((p) + 1) : (p)->ext_pkt)
-#define GET_PKT_DIRECT_DATA(p) (uint8_t *)((p) + 1)
+#define GET_PKT_LEN(p)             (p)->pktlen
+#define GET_PKT_DATA(p)            (((p)->ext_pkt == NULL) ? GET_PKT_DIRECT_DATA(p) : (p)->ext_pkt)
+#define GET_PKT_DIRECT_DATA(p)     (p)->pkt_data
 #define GET_PKT_DIRECT_MAX_SIZE(p) (default_packet_size)
 
 #define SET_PKT_LEN(p, len) do { \
@@ -404,6 +404,7 @@ enum PacketDropReason {
     PKT_DROP_REASON_STREAM_ERROR,
     PKT_DROP_REASON_STREAM_MEMCAP,
     PKT_DROP_REASON_STREAM_MIDSTREAM,
+    PKT_DROP_REASON_STREAM_REASSEMBLY,
     PKT_DROP_REASON_NFQ_ERROR,    /**< no nfq verdict, must be error */
     PKT_DROP_REASON_INNER_PACKET, /**< drop issued by inner (tunnel) packet */
     PKT_DROP_REASON_MAX,
@@ -653,6 +654,11 @@ typedef struct Packet_
          */
         SCSpinlock tunnel_lock;
     } persistent;
+
+    /** flex array accessor to allocated packet data. Size of the additional
+     *  data is `default_packet_size`. If this is insufficient,
+     *  Packet::ext_pkt will be used instead. */
+    uint8_t pkt_data[];
 } Packet;
 
 /** highest mtu of the interfaces we monitor */

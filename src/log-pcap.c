@@ -141,7 +141,6 @@ typedef struct PcapLogCompressionData_ {
 typedef struct PcapLogData_ {
     int use_stream_depth;       /**< use stream depth i.e. ignore packets that reach limit */
     int honor_pass_rules;       /**< don't log if pass rules have matched */
-    int is_private;             /**< TRUE if ctx is thread local */
     SCMutex plog_lock;
     uint64_t pkt_cnt;		    /**< total number of packets */
     struct pcap_pkthdr *h;      /**< pcap header struct */
@@ -155,6 +154,7 @@ typedef struct PcapLogData_ {
     uint64_t profile_data_size; /**< track in bytes how many bytes we wrote */
     uint32_t file_cnt;          /**< count of pcap files we currently have */
     uint32_t max_files;         /**< maximum files to use in ring buffer mode */
+    bool is_private;            /**< true if ctx is thread local */
     LogModeConditionalType
             conditional; /**< log all packets or just packets and flows with alerts */
 
@@ -206,7 +206,7 @@ static TmEcode PcapLogDataDeinit(ThreadVars *, void *);
 static void PcapLogFileDeInitCtx(OutputCtx *);
 static OutputInitResult PcapLogInitCtx(ConfNode *);
 static void PcapLogProfilingDump(PcapLogData *);
-static int PcapLogCondition(ThreadVars *, void *, const Packet *);
+static bool PcapLogCondition(ThreadVars *, void *, const Packet *);
 
 void PcapLogRegister(void)
 {
@@ -226,7 +226,7 @@ void PcapLogRegister(void)
     (prof).total += (UtilCpuGetTicks() - pcaplog_profile_ticks); \
     (prof).cnt++
 
-static int PcapLogCondition(ThreadVars *tv, void *thread_data, const Packet *p)
+static bool PcapLogCondition(ThreadVars *tv, void *thread_data, const Packet *p)
 {
     PcapLogThreadData *ptd = (PcapLogThreadData *)thread_data;
 
@@ -235,29 +235,21 @@ static int PcapLogCondition(ThreadVars *tv, void *thread_data, const Packet *p)
         case LOGMODE_COND_ALL:
             break;
         case LOGMODE_COND_ALERTS:
-            if (p->alerts.cnt || (p->flow && FlowHasAlerts(p->flow))) {
-                return TRUE;
-            } else {
-                return FALSE;
-            }
+            return (p->alerts.cnt || (p->flow && FlowHasAlerts(p->flow)));
             break;
         case LOGMODE_COND_TAG:
-            if (p->flags & (PKT_HAS_TAG | PKT_FIRST_TAG)) {
-                return TRUE;
-            } else {
-                return FALSE;
-            }
+            return (p->flags & (PKT_HAS_TAG | PKT_FIRST_TAG));
             break;
     }
 
     if (p->flags & PKT_PSEUDO_STREAM_END) {
-        return FALSE;
+        return false;
     }
 
     if (IS_TUNNEL_PKT(p) && !IS_TUNNEL_ROOT_PKT(p)) {
-        return FALSE;
+        return false;
     }
-    return TRUE;
+    return true;
 }
 
 /**
@@ -506,7 +498,7 @@ static void PcapLogUnlock(PcapLogData *pl)
 }
 
 static inline int PcapWrite(
-        PcapLogData *pl, PcapLogCompressionData *comp, uint8_t *data, size_t len)
+        PcapLogData *pl, PcapLogCompressionData *comp, const uint8_t *data, const size_t len)
 {
     struct timeval current_dump;
     gettimeofday(&current_dump, NULL);
@@ -771,7 +763,7 @@ static PcapLogData *PcapLogDataCopy(const PcapLogData *pl)
     copy->suffix = pl->suffix;
 
     /* settings TODO move to global cfg struct */
-    copy->is_private = TRUE;
+    copy->is_private = true;
     copy->mode = pl->mode;
     copy->max_files = pl->max_files;
     copy->use_ringbuffer = pl->use_ringbuffer;
@@ -1357,11 +1349,10 @@ static OutputInitResult PcapLogInitCtx(ConfNode *conf)
     int en;
     PCRE2_SIZE eo = 0;
 
-    PcapLogData *pl = SCMalloc(sizeof(PcapLogData));
+    PcapLogData *pl = SCCalloc(1, sizeof(PcapLogData));
     if (unlikely(pl == NULL)) {
         FatalError("Failed to allocate Memory for PcapLogData");
     }
-    memset(pl, 0, sizeof(PcapLogData));
 
     pl->h = SCMalloc(sizeof(*pl->h));
     if (pl->h == NULL) {
@@ -1745,11 +1736,10 @@ static int PcapLogOpenFileCtx(PcapLogData *pl)
     SCTime_t ts = TimeGet();
 
     /* Place to store the name of our PCAP file */
-    PcapFileName *pf = SCMalloc(sizeof(PcapFileName));
+    PcapFileName *pf = SCCalloc(1, sizeof(PcapFileName));
     if (unlikely(pf == NULL)) {
         return -1;
     }
-    memset(pf, 0, sizeof(PcapFileName));
 
     if (pl->mode == LOGMODE_SGUIL) {
         struct tm local_tm;

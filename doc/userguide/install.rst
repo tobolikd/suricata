@@ -59,7 +59,7 @@ Common configure options
 
 .. option:: --enable-dpdk
 
-    Enables `DPDK <https://www.dpdk.org/>` packet capture method.
+    Enables `DPDK <https://www.dpdk.org/>`_ packet capture method.
 
 Dependencies
 ^^^^^^^^^^^^
@@ -90,18 +90,20 @@ Rust support::
 Ubuntu/Debian
 """""""""""""
 
+.. note:: The following instructions require ``sudo`` to be installed.
+
 Minimal::
 
     # Installed Rust and cargo as indicated above
-    apt-get install build-essential git libjansson-dev libpcap-dev \
+    sudo apt-get install build-essential git libjansson-dev libpcap-dev \
                     libpcre2-dev libtool libyaml-dev make pkg-config zlib1g-dev
     # On most distros installing cbindgen with package manager should be enough
-    apt-get install cbindgen # alternative: cargo install --force cbindgen
+    sudo apt-get install cbindgen # alternative: cargo install --force cbindgen
 
 Recommended::
 
     # Installed Rust and cargo as indicated above
-    apt-get install autoconf automake build-essential ccache clang curl git \
+    sudo apt-get install autoconf automake build-essential ccache clang curl git \
                     gosu jq libbpf-dev libcap-ng0 libcap-ng-dev libelf-dev \
                     libevent-dev libgeoip-dev libhiredis-dev libjansson-dev \
                     liblua5.1-dev libmagic-dev libnet1-dev libpcap-dev \
@@ -112,39 +114,41 @@ Recommended::
 
 Extra for iptables/nftables IPS integration::
 
-    apt-get install libnetfilter-queue-dev libnetfilter-queue1  \
+    sudo apt-get install libnetfilter-queue-dev libnetfilter-queue1  \
                     libnetfilter-log-dev libnetfilter-log1      \
                     libnfnetlink-dev libnfnetlink0
 
 CentOS, AlmaLinux, RockyLinux, Fedora, etc
 """"""""""""""""""""""""""""""""""""""""""
 
+.. note:: The following instructions require ``sudo`` to be installed.
+
 To install all minimal dependencies, it is required to enable extra package
 repository in most distros. You can enable it possibly by
 one of the following ways::
 
-    dnf -y update
-    dnf -y install dnf-plugins-core
+    sudo dnf -y update
+    sudo dnf -y install dnf-plugins-core
     # AlmaLinux 8
-    dnf config-manager --set-enabled powertools
+    sudo dnf config-manager --set-enabled powertools
     # AlmaLinux 9
-    dnf config-manager --set-enable crb
+    sudo dnf config-manager --set-enable crb
     # Oracle Linux 8
-    dnf config-manager --set-enable ol8_codeready_builder
+    sudo dnf config-manager --set-enable ol8_codeready_builder
     # Oracle Linux 9
-    dnf config-manager --set-enable ol9_codeready_builder
+    sudo dnf config-manager --set-enable ol9_codeready_builder
 
 Minimal::
 
     # Installed Rust and cargo as indicated above
-    dnf install -y gcc gcc-c++ git jansson-devel libpcap-devel libtool \
+    sudo dnf install -y gcc gcc-c++ git jansson-devel libpcap-devel libtool \
                    libyaml-devel make pcre2-devel which zlib-devel
     cargo install --force cbindgen
 
 Recommended::
 
     # Installed Rust and cargo as indicated above
-    dnf install -y autoconf automake diffutils file-devel gcc gcc-c++ git \
+    sudo dnf install -y autoconf automake diffutils file-devel gcc gcc-c++ git \
                    jansson-devel jq libcap-ng-devel libevent-devel \
                    libmaxminddb-devel libnet-devel libnetfilter_queue-devel \
                    libnfnetlink-devel libpcap-devel libtool libyaml-devel \
@@ -154,7 +158,7 @@ Recommended::
     cargo install --force cbindgen
 
 Compilation
-"""""""""""
+^^^^^^^^^^^
 
 Follow these steps from your Suricata directory::
 
@@ -165,25 +169,129 @@ Follow these steps from your Suricata directory::
     make -j8 # j is for paralleling, you may de/increase depending on your CPU
     make install # to install your Suricata compiled binary
 
+Auto-Setup
+^^^^^^^^^^
+
+You can also use the available auto-setup features of Suricata:
+
+::
+
+    ./configure && make && sudo make install-conf
+
+*make install-conf* would do the regular "make install" and then it would automatically
+create/setup all the necessary directories and ``suricata.yaml`` for you.
+
+::
+
+    ./configure && make && sudo make install-rules
+
+*make install-rules* would do the regular "make install" and then it would automatically
+download and set up the latest ruleset from Emerging Threats available for Suricata.
+
+::
+
+    ./configure && make && sudo make install-full
+
+*make install-full* would combine everything mentioned above (install-conf and install-rules)
+and will present you with a ready-to-run (configured and set-up) Suricata.
+
 .. _install-binary-packages:
 
 Binary packages
 ---------------
 
-Ubuntu
-^^^^^^
+Ubuntu from Personal Package Archives (PPA)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For Ubuntu, the OISF maintains a PPA ``suricata-stable`` that always contains the latest stable release.
+For Ubuntu, OISF maintains a PPA ``suricata-stable`` that always contains the
+latest stable release.
 
-To use it::
+.. note:: The following instructions require ``sudo`` to be installed.
+
+Setup to install the latest stable Suricata::
 
     sudo apt-get install software-properties-common
     sudo add-apt-repository ppa:oisf/suricata-stable
     sudo apt-get update
+
+Then, you can install the latest stable with::
+
     sudo apt-get install suricata
+
+After installing you can proceed to the :ref:`Basic setup`.
+
+`OISF launchpad: suricata-stable <https://launchpad.net/~oisf/+archive/suricata-stable>`_.
+
+Upgrading
+"""""""""
+
+To upgrade::
+
+    sudo apt-get update
+    sudo apt-get upgrade suricata
+
+Remove
+""""""
+
+To remove Suricata from your system::
+
+    sudo apt-get remove suricata
+
+
+
+Getting Debug or Pre-release Versions
+"""""""""""""""""""""""""""""""""""""
+
+.. note:: The following instructions require ``sudo`` to be installed.
+
+If you want Suricata with built-in (enabled) debugging, you can install the
+debug package::
+
+    sudo apt-get install suricata-dbg
+
+If you would like to help test the Release Candidate (RC) packages, the same procedures
+apply, just using another PPA: ``suricata-beta``::
+
+    sudo add-apt-repository ppa:oisf/suricata-beta
+    sudo apt-get update
+    sudo apt-get upgrade
+
+You can use both the suricata-stable and suricata-beta repositories together.
+Suricata will then always be the latest release, stable or beta.
+
+`OISF launchpad: suricata-beta <https://launchpad.net/~oisf/+archive/suricata-beta>`_.
+
+Daily Releases
+""""""""""""""
+
+.. note:: The following instructions require ``sudo`` to be installed.
+
+If you would like to help test the daily build packages from our latest git(dev)
+repository, the same procedures as above apply, just using another PPA,
+``suricata-daily``::
+
+    sudo add-apt-repository ppa:oisf/suricata-daily-allarch
+    sudo apt-get update
+    sudo apt-get upgrade
+
+.. note::
+
+    Please have in mind that this is packaged from our latest development git master
+    and is therefore potentially unstable.
+
+    We do our best to make others aware of continuing development and items
+    within the engine that are not yet complete or optimal. With this in mind,
+    please refer to `Suricata's issue tracker on Redmine 
+    <http://redmine.openinfosecfoundation.org/projects/suricata/issues>`_ 
+    for an up-to-date list of what we are working on, planned roadmap, 
+    and to report issues.
+
+`OISF launchpad: suricata-daily <https://launchpad.net/~oisf/+archive/suricata-daily>`_.
 
 Debian
 ^^^^^^
+
+.. note:: The following instructions require ``sudo`` to be installed.
 
 In Debian 9 (stretch) and later do::
 
@@ -202,6 +310,8 @@ For Debian 10 (buster), for instance, run the following as ``root``::
     apt-get update
     apt-get install suricata -t buster-backports
 
+.. _RPM packages:
+
 CentOS, AlmaLinux, RockyLinux, Fedora, etc
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -218,29 +328,31 @@ Installing From Package Repositories
 CentOS, RHEL, AlmaLinux, RockyLinux, etc Version 8+
 '''''''''''''''''''''''''''''''''''''''''''''''''''
 
+.. note:: The following instructions require ``sudo`` to be installed.
+
 .. code-block:: none
 
-   dnf install epel-release dnf-plugins-core
-   dnf copr enable @oisf/suricata-7.0
-   dnf install suricata
+   sudo dnf install epel-release dnf-plugins-core
+   sudo dnf copr enable @oisf/suricata-7.0
+   sudo dnf install suricata
 
 CentOS 7
 ''''''''
 
 .. code-block:: none
 
-   yum install epel-release yum-plugin-copr
-   yum copr enable @oisf/suricata-7.0
-   yum install suricata
+   sudo yum install epel-release yum-plugin-copr
+   sudo yum copr enable @oisf/suricata-7.0
+   sudo yum install suricata
 
 Fedora
 ''''''
 
 .. code-block:: none
 
-    dnf install dnf-plugins-core
-    dnf copr enable @oisf/suricata-7.0
-    dnf install suricata
+    sudo dnf install dnf-plugins-core
+    sudo dnf copr enable @oisf/suricata-7.0
+    sudo dnf install suricata
 
 Additional Notes for RPM Installations
 """"""""""""""""""""""""""""""""""""""
@@ -261,21 +373,23 @@ Starting Suricata On-Boot
 
 The Suricata RPMs are configured to run from Systemd.
 
+.. note:: The following instructions require ``sudo`` to be installed.
+
 To start Suricata::
 
-  systemctl start suricata
+  sudo systemctl start suricata
 
 To stop Suricata::
 
-  systemctl stop suricata
+  sudo systemctl stop suricata
 
 To have Suricata start on-boot::
 
-  systemctl enable suricata
+  sudo systemctl enable suricata
 
 To reload rules::
 
-   systemctl reload suricata
+  sudo systemctl reload suricata
 
 .. _install-advanced:
 
@@ -294,5 +408,9 @@ Suricata packages.
 Advanced Installation
 ---------------------
 
-Various installation guides for installing from GIT and for other operating systems are maintained at:
+If you are using Ubuntu, you can follow
+:doc:`devguide/codebase/installation-from-git`.
+
+For other various installation guides for installing from GIT and for other operating
+systems, please check (bear in mind that those may be somewhat outdated):
 https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Suricata_Installation

@@ -114,11 +114,9 @@ IPPair *IPPairAlloc(void)
 
     (void) SC_ATOMIC_ADD(ippair_memuse, g_ippair_size);
 
-    IPPair *h = SCMalloc(g_ippair_size);
+    IPPair *h = SCCalloc(1, g_ippair_size);
     if (unlikely(h == NULL))
         goto error;
-
-    memset(h, 0x00, g_ippair_size);
 
     SCMutexInit(&h->m, NULL);
     SC_ATOMIC_INIT(h->use_cnt);
@@ -340,14 +338,11 @@ void IPPairShutdown(void)
  */
 void IPPairCleanup(void)
 {
-    IPPair *h;
-    uint32_t u;
-
     if (ippair_hash != NULL) {
-        for (u = 0; u < ippair_config.hash_size; u++) {
-            h = ippair_hash[u].head;
+        for (uint32_t u = 0; u < ippair_config.hash_size; u++) {
             IPPairHashRow *hb = &ippair_hash[u];
             HRLOCK_LOCK(hb);
+            IPPair *h = ippair_hash[u].head;
             while (h) {
                 if ((SC_ATOMIC_GET(h->use_cnt) > 0)) {
                     /* iprep is attached to ippair only clear local storage */

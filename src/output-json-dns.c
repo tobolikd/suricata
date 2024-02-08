@@ -24,27 +24,14 @@
  */
 
 #include "suricata-common.h"
-#include "detect.h"
-#include "pkt-var.h"
 #include "conf.h"
 
-#include "threads.h"
 #include "threadvars.h"
-#include "tm-threads.h"
-
-#include "util-print.h"
-#include "util-unittest.h"
 
 #include "util-debug.h"
 #include "util-mem.h"
 #include "app-layer-parser.h"
 #include "output.h"
-#include "app-layer.h"
-#include "util-privs.h"
-#include "util-buffer.h"
-#include "util-proto-name.h"
-#include "util-logopenfile.h"
-#include "util-time.h"
 
 #include "output-json.h"
 #include "output-json-dns.h"
@@ -263,7 +250,7 @@ typedef struct LogDnsLogThread_ {
     OutputJsonThreadCtx *ctx;
 } LogDnsLogThread;
 
-JsonBuilder *JsonDNSLogQuery(void *txptr)
+static JsonBuilder *JsonDNSLogQuery(void *txptr)
 {
     JsonBuilder *queryjb = jb_new_array();
     if (queryjb == NULL) {
@@ -292,7 +279,7 @@ JsonBuilder *JsonDNSLogQuery(void *txptr)
     return queryjb;
 }
 
-JsonBuilder *JsonDNSLogAnswer(void *txptr)
+static JsonBuilder *JsonDNSLogAnswer(void *txptr)
 {
     if (!rs_dns_do_log_answer(txptr, LOG_ALL_RRTYPES)) {
         return NULL;
@@ -302,6 +289,23 @@ JsonBuilder *JsonDNSLogAnswer(void *txptr)
         jb_close(js);
         return js;
     }
+}
+
+bool AlertJsonDns(void *txptr, JsonBuilder *js)
+{
+    jb_open_object(js, "dns");
+    JsonBuilder *qjs = JsonDNSLogQuery(txptr);
+    if (qjs != NULL) {
+        jb_set_object(js, "query", qjs);
+        jb_free(qjs);
+    }
+    JsonBuilder *ajs = JsonDNSLogAnswer(txptr);
+    if (ajs != NULL) {
+        jb_set_object(js, "answer", ajs);
+        jb_free(ajs);
+    }
+    jb_close(js);
+    return true;
 }
 
 static int JsonDnsLoggerToServer(ThreadVars *tv, void *thread_data,
@@ -486,7 +490,7 @@ static void JsonDnsCheckVersion(ConfNode *conf)
                     break;
                 case 1:
                     if (!v1_deprecation_warned) {
-                        SCLogError("DNS EVE v1 logging has been removed, will use v2");
+                        SCLogWarning("DNS EVE v1 logging has been removed, will use v2");
                         v1_deprecation_warned = true;
                     }
                     break;
@@ -512,14 +516,22 @@ static void JsonDnsLogInitFilters(LogDnsFileCtx *dnslog_ctx, ConfNode *conf)
         if (dnslog_ctx->flags & LOG_ANSWERS) {
             ConfNode *format;
             if ((format = ConfNodeLookupChild(conf, "formats")) != NULL) {
-                dnslog_ctx->flags &= ~LOG_FORMAT_ALL;
+                uint64_t flags = 0;
                 ConfNode *field;
                 TAILQ_FOREACH (field, &format->head, next) {
                     if (strcasecmp(field->val, "detailed") == 0) {
-                        dnslog_ctx->flags |= LOG_FORMAT_DETAILED;
+                        flags |= LOG_FORMAT_DETAILED;
                     } else if (strcasecmp(field->val, "grouped") == 0) {
-                        dnslog_ctx->flags |= LOG_FORMAT_GROUPED;
+                        flags |= LOG_FORMAT_GROUPED;
+                    } else {
+                        SCLogWarning("Invalid JSON DNS log format: %s", field->val);
                     }
+                }
+                if (flags) {
+                    dnslog_ctx->flags &= ~LOG_FORMAT_ALL;
+                    dnslog_ctx->flags |= flags;
+                } else {
+                    SCLogWarning("Empty EVE DNS format array, using defaults");
                 }
             } else {
                 dnslog_ctx->flags |= LOG_FORMAT_ALL;
@@ -543,11 +555,10 @@ static OutputInitResult JsonDnsLogInitCtxSub(ConfNode *conf, OutputCtx *parent_c
 
     OutputJsonCtx *ojc = parent_ctx->data;
 
-    LogDnsFileCtx *dnslog_ctx = SCMalloc(sizeof(LogDnsFileCtx));
+    LogDnsFileCtx *dnslog_ctx = SCCalloc(1, sizeof(LogDnsFileCtx));
     if (unlikely(dnslog_ctx == NULL)) {
         return result;
     }
-    memset(dnslog_ctx, 0x00, sizeof(LogDnsFileCtx));
 
     dnslog_ctx->eve_ctx = ojc;
 

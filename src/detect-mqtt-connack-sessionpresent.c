@@ -62,7 +62,7 @@ void DetectMQTTConnackSessionPresentRegister (void)
 
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
 
-    DetectAppLayerInspectEngineRegister2("mqtt.connack.session_present", ALPROTO_MQTT,
+    DetectAppLayerInspectEngineRegister("mqtt.connack.session_present", ALPROTO_MQTT,
             SIG_FLAG_TOSERVER, 1, DetectEngineInspectGenericList, NULL);
 
     mqtt_connack_session_present_id = DetectBufferTypeGetByName("mqtt.connack.session_present");
@@ -156,7 +156,6 @@ error:
 static int DetectMQTTConnackSessionPresentSetup (DetectEngineCtx *de_ctx, Signature *s, const char *rawstr)
 {
     bool *de = NULL;
-    SigMatch *sm = NULL;
 
     if (DetectSignatureSetAppProto(s, ALPROTO_MQTT) < 0)
         return -1;
@@ -165,22 +164,16 @@ static int DetectMQTTConnackSessionPresentSetup (DetectEngineCtx *de_ctx, Signat
     if (de == NULL)
         goto error;
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_AL_MQTT_CONNACK_SESSION_PRESENT, (SigMatchCtx *)de,
+                mqtt_connack_session_present_id) == NULL) {
         goto error;
-
-    sm->type = DETECT_AL_MQTT_CONNACK_SESSION_PRESENT;
-    sm->ctx = (SigMatchCtx *)de;
-
-    SigMatchAppendSMToList(s, sm, mqtt_connack_session_present_id);
+    }
 
     return 0;
 
 error:
     if (de != NULL)
         SCFree(de);
-    if (sm != NULL)
-        SCFree(sm);
     return -1;
 }
 

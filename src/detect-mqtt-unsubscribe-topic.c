@@ -107,17 +107,10 @@ static uint8_t DetectEngineInspectMQTTUnsubscribeTopic(DetectEngineCtx *de_ctx,
         if (buffer == NULL || buffer->inspect == NULL)
             break;
 
-        det_ctx->buffer_offset = 0;
-        det_ctx->discontinue_matching = 0;
-        det_ctx->inspection_recursion_counter = 0;
-
-        const int match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd,
-                                              NULL, f,
-                                              (uint8_t *)buffer->inspect,
-                                              buffer->inspect_len,
-                                              buffer->inspect_offset, DETECT_CI_FLAGS_SINGLE,
-                                              DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-        if (match == 1) {
+        const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f,
+                buffer->inspect, buffer->inspect_len, buffer->inspect_offset,
+                DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
+        if (match) {
             return DETECT_ENGINE_INSPECT_SIG_MATCH;
         }
         local_id++;
@@ -158,9 +151,8 @@ static void PrefilterTxMQTTUnsubscribeTopic(DetectEngineThreadCtx *det_ctx, cons
             break;
 
         if (buffer->inspect_len >= mpm_ctx->minlen) {
-            (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx,
-                    &det_ctx->mtcu, &det_ctx->pmq,
-                    buffer->inspect, buffer->inspect_len);
+            (void)mpm_table[mpm_ctx->mpm_type].Search(
+                    mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
             PREFILTER_PROFILING_ADD_BYTES(det_ctx, buffer->inspect_len);
         }
         local_id++;
@@ -211,13 +203,11 @@ void DetectMQTTUnsubscribeTopicRegister (void)
                 unsubscribe_topic_match_limit);
     }
 
-    DetectAppLayerMpmRegister2("mqtt.unsubscribe.topic", SIG_FLAG_TOSERVER, 1,
-            PrefilterMpmMQTTUnsubscribeTopicRegister, NULL,
-            ALPROTO_MQTT, 1);
+    DetectAppLayerMpmRegister("mqtt.unsubscribe.topic", SIG_FLAG_TOSERVER, 1,
+            PrefilterMpmMQTTUnsubscribeTopicRegister, NULL, ALPROTO_MQTT, 1);
 
-    DetectAppLayerInspectEngineRegister2("mqtt.unsubscribe.topic",
-            ALPROTO_MQTT, SIG_FLAG_TOSERVER, 1,
-            DetectEngineInspectMQTTUnsubscribeTopic, NULL);
+    DetectAppLayerInspectEngineRegister("mqtt.unsubscribe.topic", ALPROTO_MQTT, SIG_FLAG_TOSERVER,
+            1, DetectEngineInspectMQTTUnsubscribeTopic, NULL);
 
     DetectBufferTypeSetDescriptionByName("mqtt.unsubscribe.topic",
             "unsubscribe topic query");

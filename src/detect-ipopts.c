@@ -120,6 +120,39 @@ struct DetectIpOpts_ {
 };
 
 /**
+ * \brief Return human readable value for ipopts flag
+ *
+ * \param flag uint16_t DetectIpOptsData ipopts flag value
+ */
+const char *IpOptsFlagToString(uint16_t flag)
+{
+    switch (flag) {
+        case IPV4_OPT_FLAG_RR:
+            return "rr";
+        case IPV4_OPT_FLAG_LSRR:
+            return "lsrr";
+        case IPV4_OPT_FLAG_EOL:
+            return "eol";
+        case IPV4_OPT_FLAG_NOP:
+            return "nop";
+        case IPV4_OPT_FLAG_TS:
+            return "ts";
+        case IPV4_OPT_FLAG_SEC:
+            return "sec";
+        case IPV4_OPT_FLAG_ESEC:
+            return "esec";
+        case IPV4_OPT_FLAG_SSRR:
+            return "ssrr";
+        case IPV4_OPT_FLAG_SID:
+            return "satid";
+        case 0xffff:
+            return "any";
+        default:
+            return NULL;
+    }
+}
+
+/**
  * \internal
  * \brief This function is used to match ip option on a packet with those passed via ipopts:
  *
@@ -210,27 +243,22 @@ error:
 static int DetectIpOptsSetup (DetectEngineCtx *de_ctx, Signature *s, const char *rawstr)
 {
     DetectIpOptsData *de = NULL;
-    SigMatch *sm = NULL;
 
     de = DetectIpOptsParse(rawstr);
     if (de == NULL)
         goto error;
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_IPOPTS, (SigMatchCtx *)de, DETECT_SM_LIST_MATCH) ==
+            NULL) {
         goto error;
-
-    sm->type = DETECT_IPOPTS;
-    sm->ctx = (SigMatchCtx *)de;
-
-    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
+    }
     s->flags |= SIG_FLAG_REQUIRE_PACKET;
 
     return 0;
 
 error:
-    if (de) SCFree(de);
-    if (sm) SCFree(sm);
+    if (de)
+        SCFree(de);
     return -1;
 }
 

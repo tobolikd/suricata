@@ -78,6 +78,9 @@ static void DetectFlowvarDataFree(DetectEngineCtx *de_ctx, void *ptr)
         SCReturn;
 
     DetectFlowvarData *fd = (DetectFlowvarData *)ptr;
+    /* leave unregistration to pcre keyword */
+    if (!fd->post_match)
+        VarNameStoreUnregister(fd->idx, VAR_TYPE_FLOW_VAR);
 
     if (fd->name)
         SCFree(fd->name);
@@ -114,7 +117,6 @@ int DetectFlowvarMatch (DetectEngineThreadCtx *det_ctx, Packet *p,
 static int DetectFlowvarSetup (DetectEngineCtx *de_ctx, Signature *s, const char *rawstr)
 {
     DetectFlowvarData *fd = NULL;
-    SigMatch *sm = NULL;
     char varname[64], varcontent[64];
     int res = 0;
     size_t pcre2len;
@@ -161,10 +163,9 @@ static int DetectFlowvarSetup (DetectEngineCtx *de_ctx, Signature *s, const char
     if (res == -1)
         goto error;
 
-    fd = SCMalloc(sizeof(DetectFlowvarData));
+    fd = SCCalloc(1, sizeof(DetectFlowvarData));
     if (unlikely(fd == NULL))
         goto error;
-    memset(fd, 0x00, sizeof(*fd));
 
     fd->content = SCMalloc(contentlen);
     if (unlikely(fd->content == NULL))
@@ -177,18 +178,15 @@ static int DetectFlowvarSetup (DetectEngineCtx *de_ctx, Signature *s, const char
     fd->name = SCStrdup(varname);
     if (unlikely(fd->name == NULL))
         goto error;
-    fd->idx = VarNameStoreSetupAdd(varname, VAR_TYPE_FLOW_VAR);
+    fd->idx = VarNameStoreRegister(varname, VAR_TYPE_FLOW_VAR);
 
     /* Okay so far so good, lets get this into a SigMatch
      * and put it in the Signature. */
-    sm = SigMatchAlloc();
-    if (unlikely(sm == NULL))
+
+    if (SigMatchAppendSMToList(
+                de_ctx, s, DETECT_FLOWVAR, (SigMatchCtx *)fd, DETECT_SM_LIST_MATCH) == NULL) {
         goto error;
-
-    sm->type = DETECT_FLOWVAR;
-    sm->ctx = (SigMatchCtx *)fd;
-
-    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
+    }
 
     SCFree(content);
     return 0;
@@ -196,8 +194,6 @@ static int DetectFlowvarSetup (DetectEngineCtx *de_ctx, Signature *s, const char
 error:
     if (fd != NULL)
         DetectFlowvarDataFree(de_ctx, fd);
-    if (sm != NULL)
-        SCFree(sm);
     if (content != NULL)
         SCFree(content);
     return -1;
@@ -262,25 +258,20 @@ int DetectVarStoreMatch(DetectEngineThreadCtx *det_ctx,
  */
 int DetectFlowvarPostMatchSetup(DetectEngineCtx *de_ctx, Signature *s, uint32_t idx)
 {
-    SigMatch *sm = NULL;
     DetectFlowvarData *fv = NULL;
 
-    fv = SCMalloc(sizeof(DetectFlowvarData));
+    fv = SCCalloc(1, sizeof(DetectFlowvarData));
     if (unlikely(fv == NULL))
         goto error;
-    memset(fv, 0x00, sizeof(*fv));
 
     /* we only need the idx */
     fv->idx = idx;
+    fv->post_match = true;
 
-    sm = SigMatchAlloc();
-    if (unlikely(sm == NULL))
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_FLOWVAR_POSTMATCH, (SigMatchCtx *)fv,
+                DETECT_SM_LIST_POSTMATCH) == NULL) {
         goto error;
-
-    sm->type = DETECT_FLOWVAR_POSTMATCH;
-    sm->ctx = (SigMatchCtx *)fv;
-
-    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_POSTMATCH);
+    }
     return 0;
 error:
     if (fv != NULL)

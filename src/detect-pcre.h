@@ -31,7 +31,6 @@
 #define DETECT_PCRE_RAWBYTES            0x00002
 #define DETECT_PCRE_CASELESS            0x00004
 
-#define DETECT_PCRE_MATCH_LIMIT         0x00020
 #define DETECT_PCRE_RELATIVE_NEXT       0x00040
 #define DETECT_PCRE_NEGATE              0x00080
 
@@ -41,15 +40,13 @@
 #define SC_MATCH_LIMIT_RECURSION_DEFAULT 1500
 
 typedef struct DetectPcreData_ {
-    /* pcre options */
     DetectParseRegex parse_regex;
+    int thread_ctx_id;
 
-    int opts;
     uint16_t flags;
     uint8_t idx;
     uint8_t captypes[DETECT_PCRE_CAPTURE_MAX];
     uint32_t capids[DETECT_PCRE_CAPTURE_MAX];
-    int thread_ctx_id;
 } DetectPcreData;
 
 /* prototypes */

@@ -15,6 +15,8 @@
  * 02110-1301, USA.
  */
 
+//! ASN.1 parser module.
+
 use der_parser::ber::{parse_ber_recursive, BerObject, BerObjectContent, Tag};
 use nom7::Err;
 use std::convert::TryFrom;
@@ -216,7 +218,7 @@ fn asn1_decode<'a>(
 /// pointer must be freed using `rs_asn1_free`
 #[no_mangle]
 pub unsafe extern "C" fn rs_asn1_decode(
-    input: *const u8, input_len: u16, buffer_offset: u32, ad_ptr: *const DetectAsn1Data,
+    input: *const u8, input_len: u32, buffer_offset: u32, ad_ptr: *const DetectAsn1Data,
 ) -> *mut Asn1<'static> {
     if input.is_null() || input_len == 0 || ad_ptr.is_null() {
         return std::ptr::null_mut();

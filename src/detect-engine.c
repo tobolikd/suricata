@@ -77,6 +77,7 @@
 #include "util-spm.h"
 #include "util-device.h"
 #include "util-var-name.h"
+#include "util-path.h"
 #include "util-profiling.h"
 #include "util-validate.h"
 #include "util-hash-string.h"
@@ -212,10 +213,8 @@ void DetectFrameInspectEngineRegister(const char *name, int dir,
 /** \brief register inspect engine at start up time
  *
  *  \note errors are fatal */
-void DetectAppLayerInspectEngineRegister2(const char *name,
-        AppProto alproto, uint32_t dir, int progress,
-        InspectEngineFuncPtr2 Callback2,
-        InspectionBufferGetDataPtr GetData)
+void DetectAppLayerInspectEngineRegister(const char *name, AppProto alproto, uint32_t dir,
+        int progress, InspectEngineFuncPtr Callback, InspectionBufferGetDataPtr GetData)
 {
     BUG_ON(progress >= 48);
 
@@ -226,15 +225,12 @@ void DetectAppLayerInspectEngineRegister2(const char *name,
     }
     SCLogDebug("name %s id %d", name, sm_list);
 
-    if ((alproto >= ALPROTO_FAILED) ||
-        (!(dir == SIG_FLAG_TOSERVER || dir == SIG_FLAG_TOCLIENT)) ||
-        (sm_list < DETECT_SM_LIST_MATCH) || (sm_list >= SHRT_MAX) ||
-        (progress < 0 || progress >= SHRT_MAX) ||
-        (Callback2 == NULL))
-    {
+    if ((alproto >= ALPROTO_FAILED) || (!(dir == SIG_FLAG_TOSERVER || dir == SIG_FLAG_TOCLIENT)) ||
+            (sm_list < DETECT_SM_LIST_MATCH) || (sm_list >= SHRT_MAX) ||
+            (progress < 0 || progress >= SHRT_MAX) || (Callback == NULL)) {
         SCLogError("Invalid arguments");
         BUG_ON(1);
-    } else if (Callback2 == DetectEngineInspectBufferGeneric && GetData == NULL) {
+    } else if (Callback == DetectEngineInspectBufferGeneric && GetData == NULL) {
         SCLogError("Invalid arguments: must register "
                    "GetData with DetectEngineInspectBufferGeneric");
         BUG_ON(1);
@@ -247,17 +243,17 @@ void DetectAppLayerInspectEngineRegister2(const char *name,
         direction = 1;
     }
 
-    DetectEngineAppInspectionEngine *new_engine = SCMalloc(sizeof(DetectEngineAppInspectionEngine));
+    DetectEngineAppInspectionEngine *new_engine =
+            SCCalloc(1, sizeof(DetectEngineAppInspectionEngine));
     if (unlikely(new_engine == NULL)) {
         exit(EXIT_FAILURE);
     }
-    memset(new_engine, 0, sizeof(*new_engine));
     new_engine->alproto = alproto;
     new_engine->dir = direction;
     new_engine->sm_list = (uint16_t)sm_list;
     new_engine->sm_list_base = (uint16_t)sm_list;
     new_engine->progress = (int16_t)progress;
-    new_engine->v2.Callback = Callback2;
+    new_engine->v2.Callback = Callback;
     new_engine->v2.GetData = GetData;
 
     if (g_app_inspect_engines == NULL) {
@@ -1443,6 +1439,8 @@ int DetectBufferSetActiveList(DetectEngineCtx *de_ctx, Signature *s, const int l
     s->init_data->curbuf->id = list;
     s->init_data->curbuf->head = NULL;
     s->init_data->curbuf->tail = NULL;
+    s->init_data->curbuf->multi_capable =
+            DetectEngineBufferTypeSupportsMultiInstanceGetById(de_ctx, list);
     SCLogDebug("new: idx %u list %d set up curbuf %p", s->init_data->buffer_index - 1, list,
             s->init_data->curbuf);
 
@@ -1469,6 +1467,7 @@ int DetectBufferGetActiveList(DetectEngineCtx *de_ctx, Signature *s)
         if (new_list == -1) {
             SCReturnInt(-1);
         }
+        int base_list = s->init_data->list;
         SCLogDebug("new_list %d", new_list);
         s->init_data->list = new_list;
         s->init_data->list_set = false;
@@ -1481,6 +1480,8 @@ int DetectBufferGetActiveList(DetectEngineCtx *de_ctx, Signature *s)
                 return -1;
             }
             s->init_data->curbuf = &s->init_data->buffers[s->init_data->buffer_index++];
+            s->init_data->curbuf->multi_capable =
+                    DetectEngineBufferTypeSupportsMultiInstanceGetById(de_ctx, base_list);
         }
         if (s->init_data->curbuf == NULL) {
             SCLogError("failed to setup buffer");
@@ -1684,8 +1685,8 @@ void InspectionBufferCopy(InspectionBuffer *buffer, uint8_t *buf, uint32_t buf_l
  *  transform may validate that it's compatible with the transform.
  *
  *  When a transform indicates the byte array is incompatible, none of the
- *  subsequent transforms, if any, are invoked. This means the first positive
- *  validation result terminates the loop.
+ *  subsequent transforms, if any, are invoked. This means the first validation
+ *  failure terminates the loop.
  *
  *  \param de_ctx Detection engine context.
  *  \param sm_list The SM list id.
@@ -1892,7 +1893,6 @@ int DetectEngineBufferTypeGetByIdTransforms(
     BUG_ON(HashListTableAdd(de_ctx->buffer_type_hash_name, (void *)map, 0) != 0);
     BUG_ON(HashListTableAdd(de_ctx->buffer_type_hash_id, (void *)map, 0) != 0);
     SCLogDebug("buffer %s registered with id %d, parent %d", map->name, map->id, map->parent_id);
-    de_ctx->buffer_type_id++;
 
     if (map->frame) {
         DetectFrameInspectEngineCopy(de_ctx, map->parent_id, map->id, &map->transforms);
@@ -1923,7 +1923,7 @@ static int DetectEngineInspectRulePacketMatches(
         if (sigmatch_table[smd->type].Match(det_ctx, p, s, smd->ctx) <= 0) {
             KEYWORD_PROFILING_END(det_ctx, smd->type, 0);
             SCLogDebug("no match");
-            return false;
+            return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
         }
         KEYWORD_PROFILING_END(det_ctx, smd->type, 1);
         if (smd->is_last) {
@@ -1932,7 +1932,7 @@ static int DetectEngineInspectRulePacketMatches(
         }
         smd++;
     }
-    return true;
+    return DETECT_ENGINE_INSPECT_SIG_MATCH;
 }
 
 static int DetectEngineInspectRulePayloadMatches(
@@ -1963,18 +1963,22 @@ static int DetectEngineInspectRulePayloadMatches(
             /* skip if we don't have to inspect the packet and segment was
              * added to stream */
             if (!(s->flags & SIG_FLAG_REQUIRE_PACKET) && (p->flags & PKT_STREAM_ADD)) {
-                return false;
+                return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
+            }
+            if (s->flags & SIG_FLAG_REQUIRE_STREAM_ONLY) {
+                SCLogDebug("SIG_FLAG_REQUIRE_STREAM_ONLY, so no match");
+                return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
             }
             if (DetectEngineInspectPacketPayload(de_ctx, det_ctx, s, p->flow, p) != 1) {
-                return false;
+                return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
             }
         }
     } else {
         if (DetectEngineInspectPacketPayload(de_ctx, det_ctx, s, p->flow, p) != 1) {
-            return false;
+            return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
         }
     }
-    return true;
+    return DETECT_ENGINE_INSPECT_SIG_MATCH;
 }
 
 bool DetectEnginePktInspectionRun(ThreadVars *tv,
@@ -1985,8 +1989,8 @@ bool DetectEnginePktInspectionRun(ThreadVars *tv,
     SCEnter();
 
     for (DetectEnginePktInspectionEngine *e = s->pkt_inspect; e != NULL; e = e->next) {
-        if (e->v1.Callback(det_ctx, e, s, p, alert_flags) == false) {
-            SCLogDebug("sid %u: e %p Callback returned false", s->id, e);
+        if (e->v1.Callback(det_ctx, e, s, p, alert_flags) != DETECT_ENGINE_INSPECT_SIG_MATCH) {
+            SCLogDebug("sid %u: e %p Callback returned no match", s->id, e);
             return false;
         }
         SCLogDebug("sid %u: e %p Callback returned true", s->id, e);
@@ -2195,18 +2199,11 @@ uint8_t DetectEngineInspectBufferGeneric(DetectEngineCtx *de_ctx, DetectEngineTh
     ci_flags |= (offset == 0 ? DETECT_CI_FLAGS_START : 0);
     ci_flags |= buffer->flags;
 
-    det_ctx->discontinue_matching = 0;
-    det_ctx->buffer_offset = 0;
-    det_ctx->inspection_recursion_counter = 0;
-
     /* Inspect all the uricontents fetched on each
      * transaction at the app layer */
-    int r = DetectEngineContentInspection(de_ctx, det_ctx,
-                                          s, engine->smd,
-                                          NULL, f,
-                                          (uint8_t *)data, data_len, offset, ci_flags,
-                                          DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-    if (r == 1) {
+    const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f, data,
+            data_len, offset, ci_flags, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
+    if (match) {
         return DETECT_ENGINE_INSPECT_SIG_MATCH;
     } else {
         return eof ? DETECT_ENGINE_INSPECT_SIG_CANT_MATCH :
@@ -2248,25 +2245,15 @@ int DetectEngineInspectPktBufferGeneric(
         return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
     }
 
-    const uint32_t data_len = buffer->inspect_len;
-    const uint8_t *data = buffer->inspect;
-    const uint64_t offset = 0;
-
     uint8_t ci_flags = DETECT_CI_FLAGS_START|DETECT_CI_FLAGS_END;
     ci_flags |= buffer->flags;
 
-    det_ctx->discontinue_matching = 0;
-    det_ctx->buffer_offset = 0;
-    det_ctx->inspection_recursion_counter = 0;
-
     /* Inspect all the uricontents fetched on each
      * transaction at the app layer */
-    int r = DetectEngineContentInspection(det_ctx->de_ctx, det_ctx,
-                                          s, engine->smd,
-                                          p, p->flow,
-                                          (uint8_t *)data, data_len, offset, ci_flags,
-                                          DETECT_ENGINE_CONTENT_INSPECTION_MODE_HEADER);
-    if (r == 1) {
+    const bool match = DetectEngineContentInspection(det_ctx->de_ctx, det_ctx, s, engine->smd, p,
+            p->flow, buffer->inspect, buffer->inspect_len, 0, ci_flags,
+            DETECT_ENGINE_CONTENT_INSPECTION_MODE_HEADER);
+    if (match) {
         return DETECT_ENGINE_INSPECT_SIG_MATCH;
     } else {
         return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
@@ -2457,18 +2444,19 @@ retry:
     return -1;
 }
 
-static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, const char *prefix)
+static DetectEngineCtx *DetectEngineCtxInitReal(
+        enum DetectEngineType type, const char *prefix, uint32_t tenant_id)
 {
-    DetectEngineCtx *de_ctx = SCMalloc(sizeof(DetectEngineCtx));
+    DetectEngineCtx *de_ctx = SCCalloc(1, sizeof(DetectEngineCtx));
     if (unlikely(de_ctx == NULL))
         goto error;
 
-    memset(de_ctx,0,sizeof(DetectEngineCtx));
     memset(&de_ctx->sig_stat, 0, sizeof(SigFileLoaderStat));
     TAILQ_INIT(&de_ctx->sig_stat.failed_sigs);
     de_ctx->sigerror = NULL;
     de_ctx->type = type;
     de_ctx->filemagic_thread_ctx_id = -1;
+    de_ctx->tenant_id = tenant_id;
 
     if (type == DETECT_ENGINE_TYPE_DD_STUB || type == DETECT_ENGINE_TYPE_MT_STUB) {
         de_ctx->version = DetectEngineGetVersion();
@@ -2530,7 +2518,6 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     }
 
     de_ctx->version = DetectEngineGetVersion();
-    VarNameStoreSetupStaging(de_ctx->version);
     SCLogDebug("dectx with version %u", de_ctx->version);
     return de_ctx;
 error:
@@ -2543,25 +2530,25 @@ error:
 
 DetectEngineCtx *DetectEngineCtxInitStubForMT(void)
 {
-    return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_MT_STUB, NULL);
+    return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_MT_STUB, NULL, 0);
 }
 
 DetectEngineCtx *DetectEngineCtxInitStubForDD(void)
 {
-    return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_DD_STUB, NULL);
+    return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_DD_STUB, NULL, 0);
 }
 
 DetectEngineCtx *DetectEngineCtxInit(void)
 {
-    return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_NORMAL, NULL);
+    return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_NORMAL, NULL, 0);
 }
 
-DetectEngineCtx *DetectEngineCtxInitWithPrefix(const char *prefix)
+DetectEngineCtx *DetectEngineCtxInitWithPrefix(const char *prefix, uint32_t tenant_id)
 {
     if (prefix == NULL || strlen(prefix) == 0)
         return DetectEngineCtxInit();
     else
-        return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_NORMAL, prefix);
+        return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_NORMAL, prefix, tenant_id);
 }
 
 static void DetectEngineCtxFreeThreadKeywordData(DetectEngineCtx *de_ctx)
@@ -2658,10 +2645,16 @@ void DetectEngineCtxFree(DetectEngineCtx *de_ctx)
     DetectPortCleanupList(de_ctx, de_ctx->udp_whitelist);
 
     DetectBufferTypeFreeDetectEngine(de_ctx);
-    /* freed our var name hash */
-    VarNameStoreFree(de_ctx->version);
     SCClassConfDeinit(de_ctx);
     SCReferenceConfDeinit(de_ctx);
+
+    if (de_ctx->tenant_path) {
+        SCFree(de_ctx->tenant_path);
+    }
+
+    if (de_ctx->requirements) {
+        SCDetectRequiresStatusFree(de_ctx->requirements);
+    }
 
     SCFree(de_ctx);
     //DetectAddressGroupPrintMemory();
@@ -2733,10 +2726,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
         /* for now, since we still haven't implemented any intelligence into
          * understanding the patterns and distributing mpm_ctx across sgh */
         if (de_ctx->mpm_matcher == MPM_AC || de_ctx->mpm_matcher == MPM_AC_KS ||
-#ifdef BUILD_HYPERSCAN
-            de_ctx->mpm_matcher == MPM_HS ||
-#endif
-            de_ctx->mpm_matcher == MPM_AC_BS) {
+                de_ctx->mpm_matcher == MPM_HS) {
             de_ctx->sgh_mpm_ctx_cnf = ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE;
         } else {
             de_ctx->sgh_mpm_ctx_cnf = ENGINE_SGH_MPM_FACTORY_CONTEXT_FULL;
@@ -3035,13 +3025,11 @@ static int DetectEngineThreadCtxInitKeywords(DetectEngineCtx *de_ctx, DetectEngi
 {
     if (de_ctx->keyword_id > 0) {
         // coverity[suspicious_sizeof : FALSE]
-        det_ctx->keyword_ctxs_array = SCMalloc(de_ctx->keyword_id * sizeof(void *));
+        det_ctx->keyword_ctxs_array = SCCalloc(de_ctx->keyword_id, sizeof(void *));
         if (det_ctx->keyword_ctxs_array == NULL) {
             SCLogError("setting up thread local detect ctx");
             return TM_ECODE_FAILED;
         }
-
-        memset(det_ctx->keyword_ctxs_array, 0x00, de_ctx->keyword_id * sizeof(void *));
 
         det_ctx->keyword_ctxs_size = de_ctx->keyword_id;
 
@@ -3199,8 +3187,6 @@ error:
 static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx)
 {
     PatternMatchThreadPrepare(&det_ctx->mtc, de_ctx->mpm_matcher);
-    PatternMatchThreadPrepare(&det_ctx->mtcs, de_ctx->mpm_matcher);
-    PatternMatchThreadPrepare(&det_ctx->mtcu, de_ctx->mpm_matcher);
 
     PmqSetup(&det_ctx->pmq);
 
@@ -3219,12 +3205,10 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
     /* DeState */
     if (de_ctx->sig_array_len > 0) {
         det_ctx->match_array_len = de_ctx->sig_array_len;
-        det_ctx->match_array = SCMalloc(det_ctx->match_array_len * sizeof(Signature *));
+        det_ctx->match_array = SCCalloc(det_ctx->match_array_len, sizeof(Signature *));
         if (det_ctx->match_array == NULL) {
             return TM_ECODE_FAILED;
         }
-        memset(det_ctx->match_array, 0,
-               det_ctx->match_array_len * sizeof(Signature *));
 
         RuleMatchCandidateTxArrayInit(det_ctx, de_ctx->sig_array_len);
     }
@@ -3306,10 +3290,9 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
  */
 TmEcode DetectEngineThreadCtxInit(ThreadVars *tv, void *initdata, void **data)
 {
-    DetectEngineThreadCtx *det_ctx = SCMalloc(sizeof(DetectEngineThreadCtx));
+    DetectEngineThreadCtx *det_ctx = SCCalloc(1, sizeof(DetectEngineThreadCtx));
     if (unlikely(det_ctx == NULL))
         return TM_ECODE_FAILED;
-    memset(det_ctx, 0, sizeof(DetectEngineThreadCtx));
 
     det_ctx->tv = tv;
     det_ctx->de_ctx = DetectEngineGetCurrent();
@@ -3372,10 +3355,9 @@ TmEcode DetectEngineThreadCtxInit(ThreadVars *tv, void *initdata, void **data)
 DetectEngineThreadCtx *DetectEngineThreadCtxInitForReload(
         ThreadVars *tv, DetectEngineCtx *new_de_ctx, int mt)
 {
-    DetectEngineThreadCtx *det_ctx = SCMalloc(sizeof(DetectEngineThreadCtx));
+    DetectEngineThreadCtx *det_ctx = SCCalloc(1, sizeof(DetectEngineThreadCtx));
     if (unlikely(det_ctx == NULL))
         return NULL;
-    memset(det_ctx, 0, sizeof(DetectEngineThreadCtx));
 
     det_ctx->tenant_id = new_de_ctx->tenant_id;
     det_ctx->tv = tv;
@@ -3451,8 +3433,6 @@ static void DetectEngineThreadCtxFree(DetectEngineThreadCtx *det_ctx)
     /** \todo get rid of this static */
     if (det_ctx->de_ctx != NULL) {
         PatternMatchThreadDestroy(&det_ctx->mtc, det_ctx->de_ctx->mpm_matcher);
-        PatternMatchThreadDestroy(&det_ctx->mtcs, det_ctx->de_ctx->mpm_matcher);
-        PatternMatchThreadDestroy(&det_ctx->mtcu, det_ctx->de_ctx->mpm_matcher);
     }
 
     PmqFree(&det_ctx->pmq);
@@ -3540,7 +3520,6 @@ void DetectEngineThreadCtxInfo(ThreadVars *t, DetectEngineThreadCtx *det_ctx)
 {
     /* XXX */
     PatternMatchThreadPrint(&det_ctx->mtc, det_ctx->de_ctx->mpm_matcher);
-    PatternMatchThreadPrint(&det_ctx->mtcu, det_ctx->de_ctx->mpm_matcher);
 }
 
 static uint32_t DetectKeywordCtxHashFunc(HashListTable *ht, void *data, uint16_t datalen)
@@ -3816,13 +3795,8 @@ static int DetectEngineMultiTenantLoadTenant(uint32_t tenant_id, const char *fil
 
     snprintf(prefix, sizeof(prefix), "multi-detect.%u", tenant_id);
 
-#ifdef OS_WIN32
-    struct _stat st;
-    if(_stat(filename, &st) != 0) {
-#else
-    struct stat st;
-    if(stat(filename, &st) != 0) {
-#endif /* OS_WIN32 */
+    SCStat st;
+    if (SCStatFn(filename, &st) != 0) {
         SCLogError("failed to stat file %s", filename);
         goto error;
     }
@@ -3840,7 +3814,7 @@ static int DetectEngineMultiTenantLoadTenant(uint32_t tenant_id, const char *fil
         goto error;
     }
 
-    de_ctx = DetectEngineCtxInitWithPrefix(prefix);
+    de_ctx = DetectEngineCtxInitWithPrefix(prefix, tenant_id);
     if (de_ctx == NULL) {
         SCLogError("initializing detection engine "
                    "context failed.");
@@ -3851,8 +3825,13 @@ static int DetectEngineMultiTenantLoadTenant(uint32_t tenant_id, const char *fil
     de_ctx->type = DETECT_ENGINE_TYPE_TENANT;
     de_ctx->tenant_id = tenant_id;
     de_ctx->loader_id = loader_id;
+    de_ctx->tenant_path = SCStrdup(filename);
+    if (de_ctx->tenant_path == NULL) {
+        SCLogError("Failed to duplicate path");
+        goto error;
+    }
 
-    if (SigLoadSignatures(de_ctx, NULL, 0) < 0) {
+    if (SigLoadSignatures(de_ctx, NULL, false) < 0) {
         SCLogError("Loading signatures failed.");
         goto error;
     }
@@ -3876,6 +3855,9 @@ static int DetectEngineMultiTenantReloadTenant(uint32_t tenant_id, const char *f
         return -1;
     }
 
+    if (filename == NULL)
+        filename = old_de_ctx->tenant_path;
+
     char prefix[64];
     snprintf(prefix, sizeof(prefix), "multi-detect.%u.reload.%d", tenant_id, reload_cnt);
     reload_cnt++;
@@ -3892,7 +3874,7 @@ static int DetectEngineMultiTenantReloadTenant(uint32_t tenant_id, const char *f
         goto error;
     }
 
-    DetectEngineCtx *new_de_ctx = DetectEngineCtxInitWithPrefix(prefix);
+    DetectEngineCtx *new_de_ctx = DetectEngineCtxInitWithPrefix(prefix, tenant_id);
     if (new_de_ctx == NULL) {
         SCLogError("initializing detection engine "
                    "context failed.");
@@ -3903,8 +3885,13 @@ static int DetectEngineMultiTenantReloadTenant(uint32_t tenant_id, const char *f
     new_de_ctx->type = DETECT_ENGINE_TYPE_TENANT;
     new_de_ctx->tenant_id = tenant_id;
     new_de_ctx->loader_id = old_de_ctx->loader_id;
+    new_de_ctx->tenant_path = SCStrdup(filename);
+    if (new_de_ctx->tenant_path == NULL) {
+        SCLogError("Failed to duplicate path");
+        goto error;
+    }
 
-    if (SigLoadSignatures(new_de_ctx, NULL, 0) < 0) {
+    if (SigLoadSignatures(new_de_ctx, NULL, false) < 0) {
         SCLogError("Loading signatures failed.");
         goto error;
     }
@@ -3925,8 +3912,17 @@ error:
 typedef struct TenantLoaderCtx_ {
     uint32_t tenant_id;
     int reload_cnt; /**< used by reload */
-    const char *yaml;
+    char *yaml;     /**< heap alloc'd copy of file path for the yaml */
 } TenantLoaderCtx;
+
+static void DetectLoaderFreeTenant(void *ctx)
+{
+    TenantLoaderCtx *t = (TenantLoaderCtx *)ctx;
+    if (t->yaml != NULL) {
+        SCFree(t->yaml);
+    }
+    SCFree(t);
+}
 
 static int DetectLoaderFuncLoadTenant(void *vctx, int loader_id)
 {
@@ -3946,9 +3942,13 @@ static int DetectLoaderSetupLoadTenant(uint32_t tenant_id, const char *yaml)
         return -ENOMEM;
 
     t->tenant_id = tenant_id;
-    t->yaml = yaml;
+    t->yaml = SCStrdup(yaml);
+    if (t->yaml == NULL) {
+        SCFree(t);
+        return -ENOMEM;
+    }
 
-    return DetectLoaderQueueTask(-1, DetectLoaderFuncLoadTenant, t);
+    return DetectLoaderQueueTask(-1, DetectLoaderFuncLoadTenant, t, DetectLoaderFreeTenant);
 }
 
 static int DetectLoaderFuncReloadTenant(void *vctx, int loader_id)
@@ -3961,6 +3961,39 @@ static int DetectLoaderFuncReloadTenant(void *vctx, int loader_id)
         return -1;
     }
     return 0;
+}
+
+static int DetectLoaderSetupReloadTenants(const int reload_cnt)
+{
+    int ret = 0;
+    DetectEngineMasterCtx *master = &g_master_de_ctx;
+    SCMutexLock(&master->lock);
+
+    DetectEngineCtx *de_ctx = master->list;
+    while (de_ctx) {
+        if (de_ctx->type == DETECT_ENGINE_TYPE_TENANT) {
+            TenantLoaderCtx *t = SCCalloc(1, sizeof(*t));
+            if (t == NULL) {
+                ret = -1;
+                goto error;
+            }
+            t->tenant_id = de_ctx->tenant_id;
+            t->reload_cnt = reload_cnt;
+            int loader_id = de_ctx->loader_id;
+
+            int r = DetectLoaderQueueTask(
+                    loader_id, DetectLoaderFuncReloadTenant, t, DetectLoaderFreeTenant);
+            if (r < 0) {
+                ret = -2;
+                goto error;
+            }
+        }
+
+        de_ctx = de_ctx->next;
+    }
+error:
+    SCMutexUnlock(&master->lock);
+    return ret;
 }
 
 static int DetectLoaderSetupReloadTenant(uint32_t tenant_id, const char *yaml, int reload_cnt)
@@ -3976,12 +4009,19 @@ static int DetectLoaderSetupReloadTenant(uint32_t tenant_id, const char *yaml, i
         return -ENOMEM;
 
     t->tenant_id = tenant_id;
-    t->yaml = yaml;
+    if (yaml != NULL) {
+        t->yaml = SCStrdup(yaml);
+        if (t->yaml == NULL) {
+            SCFree(t);
+            return -ENOMEM;
+        }
+    }
     t->reload_cnt = reload_cnt;
 
     SCLogDebug("loader_id %d", loader_id);
 
-    return DetectLoaderQueueTask(loader_id, DetectLoaderFuncReloadTenant, t);
+    return DetectLoaderQueueTask(
+            loader_id, DetectLoaderFuncReloadTenant, t, DetectLoaderFreeTenant);
 }
 
 /** \brief Load a tenant and wait for loading to complete
@@ -4003,6 +4043,20 @@ int DetectEngineLoadTenantBlocking(uint32_t tenant_id, const char *yaml)
 int DetectEngineReloadTenantBlocking(uint32_t tenant_id, const char *yaml, int reload_cnt)
 {
     int r = DetectLoaderSetupReloadTenant(tenant_id, yaml, reload_cnt);
+    if (r < 0)
+        return r;
+
+    if (DetectLoadersSync() != 0)
+        return -1;
+
+    return 0;
+}
+
+/** \brief Reload all tenants and wait for loading to complete
+ */
+int DetectEngineReloadTenantsBlocking(const int reload_cnt)
+{
+    int r = DetectLoaderSetupReloadTenants(reload_cnt);
     if (r < 0)
         return r;
 
@@ -4230,6 +4284,13 @@ int DetectEngineMultiTenantSetup(const bool unix_socket)
         ConfNode *tenant_node = NULL;
 
         if (tenants_root_node != NULL) {
+            const char *path = NULL;
+            ConfNode *path_node = ConfGetNode("multi-detect.config-path");
+            if (path_node) {
+                path = path_node->val;
+                SCLogConfig("tenants config path: %s", path);
+            }
+
             TAILQ_FOREACH(tenant_node, &tenants_root_node->head, next) {
                 ConfNode *id_node = ConfNodeLookupChild(tenant_node, "id");
                 if (id_node == NULL) {
@@ -4250,16 +4311,24 @@ int DetectEngineMultiTenantSetup(const bool unix_socket)
                 }
                 SCLogDebug("tenant id: %u, %s", tenant_id, yaml_node->val);
 
+                char yaml_path[PATH_MAX] = "";
+                if (path) {
+                    PathMerge(yaml_path, PATH_MAX, path, yaml_node->val);
+                } else {
+                    strlcpy(yaml_path, yaml_node->val, sizeof(yaml_path));
+                }
+                SCLogDebug("tenant path: %s", yaml_path);
+
                 /* setup the yaml in this loop so that it's not done by the loader
                  * threads. ConfYamlLoadFileWithPrefix is not thread safe. */
                 char prefix[64];
                 snprintf(prefix, sizeof(prefix), "multi-detect.%u", tenant_id);
-                if (ConfYamlLoadFileWithPrefix(yaml_node->val, prefix) != 0) {
-                    SCLogError("failed to load yaml %s", yaml_node->val);
+                if (ConfYamlLoadFileWithPrefix(yaml_path, prefix) != 0) {
+                    SCLogError("failed to load yaml %s", yaml_path);
                     goto bad_tenant;
                 }
 
-                int r = DetectLoaderSetupLoadTenant(tenant_id, yaml_node->val);
+                int r = DetectLoaderSetupLoadTenant(tenant_id, yaml_path);
                 if (r < 0) {
                     /* error logged already */
                     goto bad_tenant;
@@ -4277,7 +4346,7 @@ int DetectEngineMultiTenantSetup(const bool unix_socket)
             goto error;
         }
 
-        VarNameStoreActivateStaging();
+        VarNameStoreActivate();
 
     } else {
         SCLogDebug("multi-detect not enabled (multi tenancy)");
@@ -4499,14 +4568,10 @@ int DetectEngineAddToMaster(DetectEngineCtx *de_ctx)
     return r;
 }
 
-int DetectEngineMoveToFreeList(DetectEngineCtx *de_ctx)
+static int DetectEngineMoveToFreeListNoLock(DetectEngineMasterCtx *master, DetectEngineCtx *de_ctx)
 {
-    DetectEngineMasterCtx *master = &g_master_de_ctx;
-
-    SCMutexLock(&master->lock);
     DetectEngineCtx *instance = master->list;
     if (instance == NULL) {
-        SCMutexUnlock(&master->lock);
         return -1;
     }
 
@@ -4529,7 +4594,6 @@ int DetectEngineMoveToFreeList(DetectEngineCtx *de_ctx)
             instance = next;
         }
         if (instance == NULL) {
-            SCMutexUnlock(&master->lock);
             return -1;
         }
     }
@@ -4545,9 +4609,17 @@ int DetectEngineMoveToFreeList(DetectEngineCtx *de_ctx)
         master->free_list = instance;
     }
     SCLogDebug("detect engine %p moved to free list (%u refs)", de_ctx, de_ctx->ref_cnt);
-
-    SCMutexUnlock(&master->lock);
     return 0;
+}
+
+int DetectEngineMoveToFreeList(DetectEngineCtx *de_ctx)
+{
+    int ret = 0;
+    DetectEngineMasterCtx *master = &g_master_de_ctx;
+    SCMutexLock(&master->lock);
+    ret = DetectEngineMoveToFreeListNoLock(master, de_ctx);
+    SCMutexUnlock(&master->lock);
+    return ret;
 }
 
 void DetectEnginePruneFreeList(void)
@@ -4578,6 +4650,24 @@ void DetectEnginePruneFreeList(void)
         instance = next;
     }
     SCMutexUnlock(&master->lock);
+}
+
+void DetectEngineClearMaster(void)
+{
+    DetectEngineMasterCtx *master = &g_master_de_ctx;
+    SCMutexLock(&master->lock);
+
+    DetectEngineCtx *instance = master->list;
+    while (instance) {
+        DetectEngineCtx *next = instance->next;
+        DEBUG_VALIDATE_BUG_ON(instance->ref_cnt);
+        SCLogDebug("detect engine %p has %u ref(s)", instance, instance->ref_cnt);
+        instance->ref_cnt = 0;
+        DetectEngineMoveToFreeListNoLock(master, instance);
+        instance = next;
+    }
+    SCMutexUnlock(&master->lock);
+    DetectEnginePruneFreeList();
 }
 
 static int reloads = 0;
@@ -4642,7 +4732,7 @@ int DetectEngineReload(const SCInstance *suri)
     }
 
     /* get new detection engine */
-    new_de_ctx = DetectEngineCtxInitWithPrefix(prefix);
+    new_de_ctx = DetectEngineCtxInitWithPrefix(prefix, old_de_ctx->tenant_id);
     if (new_de_ctx == NULL) {
         SCLogError("initializing detection engine "
                    "context failed.");
@@ -4679,6 +4769,15 @@ int DetectEngineReload(const SCInstance *suri)
     SCLogDebug("old_de_ctx should have been freed");
 
     SCLogNotice("rule reload complete");
+
+#ifdef HAVE_MALLOC_TRIM
+    /* The reload process potentially frees up large amounts of memory.
+     * Encourage the memory management system to reclaim as much as it
+     * can.
+     */
+    malloc_trim(0);
+#endif
+
     return 0;
 }
 

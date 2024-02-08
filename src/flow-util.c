@@ -62,12 +62,11 @@ Flow *FlowAlloc(void)
 
     (void) SC_ATOMIC_ADD(flow_memuse, size);
 
-    f = SCMalloc(size);
+    f = SCCalloc(1, size);
     if (unlikely(f == NULL)) {
         (void)SC_ATOMIC_SUB(flow_memuse, size);
         return NULL;
     }
-    memset(f, 0, size);
 
     /* coverity[missing_lock] */
     FLOW_INITIALIZE(f);
@@ -200,13 +199,9 @@ void FlowInit(Flow *f, const Packet *p)
     f->timeout_at = timeout_at;
 
     if (MacSetFlowStorageEnabled()) {
-        MacSet *ms = FlowGetStorageById(f, MacSetGetFlowStorageID());
-        if (ms != NULL) {
-            MacSetReset(ms);
-        } else {
-            ms = MacSetInit(10);
-            FlowSetStorageById(f, MacSetGetFlowStorageID(), ms);
-        }
+        DEBUG_VALIDATE_BUG_ON(FlowGetStorageById(f, MacSetGetFlowStorageID()) != NULL);
+        MacSet *ms = MacSetInit(10);
+        FlowSetStorageById(f, MacSetGetFlowStorageID(), ms);
     }
 
     SCReturn;

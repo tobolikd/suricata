@@ -36,7 +36,11 @@
  ***************************************************************************/
 
 /**
- * Anoop Saldanha <anoopsaldanha@gmail.com>
+ * \file
+ *
+ * \author Anoop Saldanha <anoopsaldanha@gmail.com>
+ *
+ * APIs from libhtp 0.5.x.
  */
 
 #ifndef __APP_LAYER_HTP_LIBHTP__H__
@@ -44,6 +48,6 @@
 
 #include "suricata-common.h"
 
-bstr *SCHTPGenerateNormalizedUri(htp_tx_t *tx, htp_uri_t *uri, int uri_include_all);
+bstr *SCHTPGenerateNormalizedUri(htp_tx_t *tx, htp_uri_t *uri, bool uri_include_all);
 
 #endif /* __APP_LAYER_HTP_LIBHTP__H__ */

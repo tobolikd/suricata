@@ -34,7 +34,7 @@ num-derive = "~0.2.5"
 num-traits = "~0.2.14"
 widestring = "~0.4.3"
 flate2 = "~1.0.19"
-brotli = "~3.3.0"
+brotli = "~3.4.0"
 hkdf = "~0.12.3"
 aes = "~0.7.5"
 aes-gcm = "~0.9.4"
@@ -70,5 +70,5 @@ time = "=0.3.13"
 suricata-derive = { path = "./derive" }
 
 [dev-dependencies]
-test-case = "~1.1.0"
+test-case = "~3.3.1"
 hex = "~0.4.3"

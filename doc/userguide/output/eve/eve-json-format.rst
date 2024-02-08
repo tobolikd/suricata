@@ -43,7 +43,307 @@ All the JSON log types share a common structure:
 ::
 
 
-  {"timestamp":"2009-11-24T21:27:09.534255","event_type":"TYPE", ...tuple... ,"TYPE":{ ... type specific content ... }}
+  {"timestamp":"2009-11-24T21:27:09.534255","flow_id":ID_NUMBER, "event_type":"TYPE", ...tuple... ,"TYPE":{ ... type specific content ... }}
+
+Field: flow_id
+~~~~~~~~~~~~~~
+
+Correlates the network protocol,  flow logs EVE data and any evidence that
+Suricata has logged to an ``alert`` event and that alert's metadata, as well as
+to ``fileinfo``/file transaction and anomaly logs, if available. The same correlation
+and logs are produced regardless if there is an alert, for any session/flow.
+
+The ability to correlate EVE logs belonging to a specific session/flow was
+introduced in 2014 (see `commit f1185d051c21 <https://github.com/OISF/suricata/
+commit/f1185d051c210ca0daacdddbe865a51af24f4ea3>`_).
+
+Further below, you can see several examples of events logged by Suricata: an
+:ref:`alert<eve-format-alert>` for an ``HTTP`` rule, ``fileinfo``, :ref:`http<eve-format-http>`,
+:ref:`anomaly<eve-format-anomaly>`, and :ref:`flow<eve-format-flow>` events, all
+easily correlated using the ``flow_id`` EVE field::
+
+    $ jq 'select(.flow_id==1676750115612680)' eve.json
+
+Event type: ``alert``::
+
+    {
+      "timestamp": "2023-09-18T06:13:41.532140+0000",
+      "flow_id": 1676750115612680,
+      "pcap_cnt": 130,
+      "event_type": "alert",
+      "src_ip": "142.11.240.191",
+      "src_port": 35361,
+      "dest_ip": "192.168.100.237",
+      "dest_port": 49175,
+      "proto": "TCP",
+      "pkt_src": "wire/pcap",
+      "ether": {
+        "src_mac": "52:54:00:36:3e:ff",
+        "dest_mac": "12:a9:86:6c:77:de"
+      },
+      "tx_id": 1,
+      "alert": {
+        "action": "allowed",
+        "gid": 1,
+        "signature_id": 2045001,
+        "rev": 1,
+        "signature": "ET ATTACK_RESPONSE Win32/LeftHook Stealer Browser Extension Config Inbound",
+        "category": "A Network Trojan was detected",
+        "severity": 1,
+        "metadata": {
+          "affected_product": [
+            "Windows_XP_Vista_7_8_10_Server_32_64_Bit"
+          ],
+          "attack_target": [
+            "Client_Endpoint"
+          ],
+          "created_at": [
+            "2023_04_17"
+          ],
+          "deployment": [
+            "Perimeter"
+          ],
+          "former_category": [
+            "ATTACK_RESPONSE"
+          ],
+          "signature_severity": [
+            "Major"
+          ],
+          "updated_at": [
+            "2023_04_18"
+          ]
+        }
+      },
+      "http": {
+        "hostname": "142.11.240.191",
+        "http_port": 35361,
+        "url": "/",
+        "http_content_type": "text/xml",
+        "http_method": "POST",
+        "protocol": "HTTP/1.1",
+        "status": 200,
+        "length": 5362
+      },
+      "files": [
+        {
+          "filename": "/",
+          "gaps": false,
+          "state": "CLOSED",
+          "stored": false,
+          "size": 5362,
+          "tx_id": 1
+        }
+      ],
+      "app_proto": "http",
+      "direction": "to_client",
+      "flow": {
+        "pkts_toserver": 13,
+        "pkts_toclient": 12,
+        "bytes_toserver": 1616,
+        "bytes_toclient": 8044,
+        "start": "2023-09-18T06:13:33.324862+0000",
+        "src_ip": "192.168.100.237",
+        "dest_ip": "142.11.240.191",
+        "src_port": 49175,
+        "dest_port": 35361
+      }
+    }
+
+Event type: ``fileinfo``::
+
+    {
+      "timestamp": "2023-09-18T06:13:33.903924+0000",
+      "flow_id": 1676750115612680,
+      "pcap_cnt": 70,
+      "event_type": "fileinfo",
+      "src_ip": "192.168.100.237",
+      "src_port": 49175,
+      "dest_ip": "142.11.240.191",
+      "dest_port": 35361,
+      "proto": "TCP",
+      "pkt_src": "wire/pcap",
+      "ether": {
+        "src_mac": "12:a9:86:6c:77:de",
+        "dest_mac": "52:54:00:36:3e:ff"
+      },
+      "http": {
+        "hostname": "142.11.240.191",
+        "http_port": 35361,
+        "url": "/",
+        "http_content_type": "text/xml",
+        "http_method": "POST",
+        "protocol": "HTTP/1.1",
+        "status": 200,
+        "length": 212
+      },
+      "app_proto": "http",
+      "fileinfo": {
+        "filename": "/",
+        "gaps": false,
+        "state": "CLOSED",
+        "stored": false,
+        "size": 137,
+        "tx_id": 0
+      }
+    }
+
+Event type: ``HTTP``::
+
+    {
+      "timestamp": "2023-09-18T06:13:33.903924+0000",
+      "flow_id": 1676750115612680,
+      "pcap_cnt": 70,
+      "event_type": "http",
+      "src_ip": "192.168.100.237",
+      "src_port": 49175,
+      "dest_ip": "142.11.240.191",
+      "dest_port": 35361,
+      "proto": "TCP",
+      "pkt_src": "wire/pcap",
+      "ether": {
+        "src_mac": "12:a9:86:6c:77:de",
+        "dest_mac": "52:54:00:36:3e:ff"
+      },
+      "tx_id": 0,
+      "http": {
+        "hostname": "142.11.240.191",
+        "http_port": 35361,
+        "url": "/",
+        "http_content_type": "text/xml",
+        "http_method": "POST",
+        "protocol": "HTTP/1.1",
+        "status": 200,
+        "length": 212,
+        "request_headers": [
+          {
+            "name": "Content-Type",
+            "value": "text/xml; charset=utf-8"
+          },
+          {
+            "name": "SOAPAction",
+            "value": "\"http://tempuri.org/Endpoint/CheckConnect\""
+          },
+          {
+            "name": "Host",
+            "value": "142.11.240.191:35361"
+          },
+          {
+            "name": "Content-Length",
+            "value": "137"
+          },
+          {
+            "name": "Expect",
+            "value": "100-continue"
+          },
+          {
+            "name": "Accept-Encoding",
+            "value": "gzip, deflate"
+          },
+          {
+            "name": "Connection",
+            "value": "Keep-Alive"
+          }
+        ],
+        "response_headers": [
+          {
+            "name": "Content-Length",
+            "value": "212"
+          },
+          {
+            "name": "Content-Type",
+            "value": "text/xml; charset=utf-8"
+          },
+          {
+            "name": "Server",
+            "value": "Microsoft-HTTPAPI/2.0"
+          },
+          {
+            "name": "Date",
+            "value": "Mon, 18 Sep 2023 06:13:33 GMT"
+          }
+        ]
+      }
+    }
+
+Event type: ``anomaly``::
+
+    {
+      "timestamp": "2023-09-18T06:13:58.882971+0000",
+      "flow_id": 1676750115612680,
+      "pcap_cnt": 2878,
+      "event_type": "anomaly",
+      "src_ip": "192.168.100.237",
+      "src_port": 49175,
+      "dest_ip": "142.11.240.191",
+      "dest_port": 35361,
+      "proto": "TCP",
+      "pkt_src": "wire/pcap",
+      "ether": {
+        "src_mac": "12:a9:86:6c:77:de",
+        "dest_mac": "52:54:00:36:3e:ff"
+      },
+      "tx_id": 3,
+      "anomaly": {
+        "app_proto": "http",
+        "type": "applayer",
+        "event": "UNABLE_TO_MATCH_RESPONSE_TO_REQUEST",
+        "layer": "proto_parser"
+      }
+    }
+
+
+Event type: ``flow``::
+
+    {
+      "timestamp": "2023-09-18T06:13:21.216460+0000",
+      "flow_id": 1676750115612680,
+      "event_type": "flow",
+      "src_ip": "192.168.100.237",
+      "src_port": 49175,
+      "dest_ip": "142.11.240.191",
+      "dest_port": 35361,
+      "proto": "TCP",
+      "app_proto": "http",
+      "flow": {
+        "pkts_toserver": 3869,
+        "pkts_toclient": 1523,
+        "bytes_toserver": 3536402,
+        "bytes_toclient": 94102,
+        "start": "2023-09-18T06:13:33.324862+0000",
+        "end": "2023-09-18T06:14:13.752399+0000",
+        "age": 40,
+        "state": "closed",
+        "reason": "shutdown",
+        "alerted": true
+      },
+      "ether": {
+        "dest_macs": [
+          "52:54:00:36:3e:ff"
+        ],
+        "src_macs": [
+          "12:a9:86:6c:77:de"
+        ]
+      },
+      "tcp": {
+        "tcp_flags": "1e",
+        "tcp_flags_ts": "1e",
+        "tcp_flags_tc": "1a",
+        "syn": true,
+        "rst": true,
+        "psh": true,
+        "ack": true,
+        "state": "closed",
+        "ts_max_regions": 1,
+        "tc_max_regions": 1
+      }
+    }
+
+.. note::
+   It is possible to have even more detailed alert records, by enabling for
+   instance logging http-body, or alert metadata (:ref:`alert output<eve-output-alert>`).
+
+Examples come from pcap found at https://app.any.run/tasks/ce7ca983-9e4b-4251-a7c3-fefa3da02ebe/.
+
 
 Event types
 ~~~~~~~~~~~
@@ -85,6 +385,8 @@ generated the event.
 .. note:: the pcap fields are only available on "real" packets, and are
           omitted from internal "pseudo" packets such as flow timeout
           packets.
+
+.. _eve-format-alert:
 
 Event type: Alert
 -----------------
@@ -190,6 +492,8 @@ Pcap Field
 If pcap log capture is active in `multi` mode, a `capture_file` key will be added to the event
 with value being the full path of the pcap file where the corresponding packets
 have been extracted.
+
+.. _eve-format-anomaly:
 
 Event type: Anomaly
 -------------------
@@ -303,6 +607,8 @@ Examples
         "layer": "proto_parser"
       }
     }
+
+.. _eve-format-http:
 
 Event type: HTTP
 ----------------
@@ -735,8 +1041,8 @@ If extended logging is enabled the following fields are also included:
 * "fingerprint": The (SHA1) fingerprint of the TLS certificate
 * "sni": The Server Name Indication (SNI) extension sent by the client
 * "version": The SSL/TLS version used
-* "not_before": The NotBefore field from the TLS certificate
-* "not_after": The NotAfter field from the TLS certificate
+* "notbefore": The NotBefore field from the TLS certificate
+* "notafter": The NotAfter field from the TLS certificate
 * "ja3": The JA3 fingerprint consisting of both a JA3 hash and a JA3 string
 * "ja3s": The JA3S fingerprint consisting of both a JA3 hash and a JA3 string
 
@@ -1344,6 +1650,8 @@ Example of SSH logging:
         }
      }
   }
+
+.. _eve-format-flow:
 
 Event type: Flow
 ----------------
@@ -2124,13 +2432,17 @@ Example of HTTP2 logging, of a request and response:
 Event type: PGSQL
 -----------------
 
-PGSQL eve-logs reflect the bidirectional nature of the protocol transactions. Each PGSQL event lists at most one
-"Request" message field and one or more "Response" messages.
+PGSQL eve-logs reflect the bidirectional nature of the protocol transactions.
+Each PGSQL event lists at most one "Request" message field and one or more
+"Response" messages.
 
-The PGSQL parser merges individual messages into one EVE output item if they belong to the same transaction. In such cases, the source and destination information (IP/port) reflect the direction of the initial request, but contain messages from both sides.
+The PGSQL parser merges individual messages into one EVE output item if they
+belong to the same transaction. In such cases, the source and destination
+information (IP/port) reflect the direction of the initial request, but contain
+messages from both sides.
 
-
-Example of ``pgsql`` event for a SimpleQuery transaction complete with request with a ``SELECT`` statement and its response::
+Example of ``pgsql`` event for a SimpleQuery transaction complete with request
+with a ``SELECT`` statement and its response::
 
   {
     "timestamp": "2021-11-24T16:56:24.403417+0000",
@@ -2156,51 +2468,80 @@ Example of ``pgsql`` event for a SimpleQuery transaction complete with request w
     }
   }
 
-While on the wire PGSQL messages follow basically two types (startup messages and regular messages), those may have different subfields and/or meanings, based on the message type. Messages are logged based on their type and relevant fields.
+While on the wire PGSQL messages follow basically two types (startup messages
+and regular messages), those may have different subfields and/or meanings, based
+on the message type. Messages are logged based on their type and relevant fields.
 
-We list a few possible message types and what they mean in Suricata. For more details on message types and formats as well as what each message and field mean for PGSQL, check  `PostgreSQL's official documentation <https://www.postgresql.org/docs/14/protocol-message-formats.html>`_.
+We list a few possible message types and what they mean in Suricata. For more
+details on message types and formats as well as what each message and field mean
+for PGSQL, check `PostgreSQL's official documentation <https://www.postgresql.org
+/docs/14/protocol-message-formats.html>`_.
 
 Fields
 ~~~~~~
 
 * "tx_id": internal transaction id.
-* "request":  each PGSQL transaction may have up to one request message. The possible messages will be described in another section.
-* "response": even when there are several "Response" messages, there is one ``response`` field that summarizes all responses for that transaction. The possible messages will be described in another section.
+* "request":  each PGSQL transaction may have up to one request message. The
+  possible messages will be described in another section.
+* "response": even when there are several "Response" messages, there is one
+  ``response`` field that summarizes all responses for that transaction. The
+  possible messages will be described in another section.
 
 Request Messages
 ~~~~~~~~~~~~~~~~
 
-Some of the possible request messages are:
+Requests are sent by the frontend (client), which would be the source of a pgsql
+flow. Some of the possible request messages are:
 
-* "startup_message": message sent by a frontend/client process to start a new PostgreSQL connection
-* "password_message": if password output for PGSQL is enabled in suricata.yaml, carries the password sent during Authentication phase
-* "simple_query": issued SQL command during simple query subprotocol. PostgreSQL identifies specific sets of commands that change the set of expected messages to be exchanged as subprotocols.
-* "message": frontend responses which do not have meaningful payloads are logged like this, where the field value is the message type
+* "startup_message": message sent to start a new PostgreSQL connection
+* "password_message": if password output for PGSQL is enabled in suricata.yaml,
+  carries the password sent during Authentication phase
+* "simple_query": issued SQL command during simple query subprotocol. PostgreSQL
+  identifies specific sets of commands that change the set of expected messages
+  to be exchanged as subprotocols.
+* ``"message": "cancel_request"``: sent after a query, when the frontend
+  attempts to cancel said query. This message is sent over a different port,
+  thus bring shown as a different flow. It has no direct answer from the
+  backend, but if successful will lead to an ``ErrorResponse`` in the
+  transaction where the query was sent.
+* "message": requests which do not have meaningful payloads are logged like this,
+  where the field value is the message type
 
-There are several different authentication messages possible, based on selected authentication method. (e.g. the SASL authentication will have a set of authentication messages different from when ``md5`` authentication is chosen).
+There are several different authentication messages possible, based on selected
+authentication method. (e.g. the SASL authentication will have a set of
+authentication messages different from when ``md5`` authentication is chosen).
 
 Response Messages
 ~~~~~~~~~~~~~~~~~
 
-Some of the possible request messages are:
+Responses are sent by the backend (server), which would be the destination of a
+pgsql flow. Some of the possible request messages are:
 
-* "authentication_sasl_final": final SCRAM ``server-final-message``, as explained at https://www.postgresql.org/docs/14/sasl-authentication.html#SASL-SCRAM-SHA-256
-* "message": Backend responses which do not have meaningful payloads are logged like this, where the field value is the message type
+* "authentication_sasl_final": final SCRAM ``server-final-message``, as explained
+  at https://www.postgresql.org/docs/14/sasl-authentication.html#SASL-SCRAM-SHA-256
+* "message": Backend responses which do not have meaningful payloads are logged
+  like this, where the field value is the message type
 * "error_response"
 * "notice_response"
 * "notification_response"
 * "authentication_md5_password": a string with the ``md5`` salt value
 * "parameter_status": logged as an array
 * "backend_key_data"
-* "data_rows": integer. When one or many ``DataRow`` messages are parsed, the total returned rows
-* "data_size": in bytes. When one or many ``DataRow`` messages are parsed, the total size in bytes of the data returned
+* "data_rows": integer. When one or many ``DataRow`` messages are parsed, the
+  total returned rows
+* "data_size": in bytes. When one or many ``DataRow`` messages are parsed, the
+  total size in bytes of the data returned
 * "command_completed": string. Informs the command just completed by the backend
-* "ssl_accepted": bool. With this event, the initial PGSQL SSL Handshake negotiation is complete in terms of tracking and logging. The session will be upgraded to use TLS encryption
+* "ssl_accepted": bool. With this event, the initial PGSQL SSL Handshake
+  negotiation is complete in terms of tracking and logging. The session will be
+  upgraded to use TLS encryption
 
 Examples
 ~~~~~~~~
 
-The two ``pgsql`` events in this example represent a rejected ``SSL handshake`` and a following connection request where the authentication method indicated by the backend was ``md5``::
+The two ``pgsql`` events in this example represent a rejected ``SSL handshake``
+and a following connection request where the authentication method indicated by
+the backend was ``md5``::
 
   {
     "timestamp": "2021-11-24T16:56:19.435242+0000",
@@ -2254,6 +2595,97 @@ The two ``pgsql`` events in this example represent a rejected ``SSL handshake`` 
       }
     }
   }
+
+``AuthenticationOk``: a response indicating that the connection was successfully
+established.::
+
+  {
+    "pgsql": {
+      "tx_id": 3,
+      "response": {
+        "message": "authentication_ok",
+        "parameter_status": [
+          {
+            "application_name": "psql"
+          },
+          {
+            "client_encoding": "UTF8"
+          },
+          {
+            "date_style": "ISO, MDY"
+          },
+          {
+            "integer_datetimes": "on"
+          },
+          {
+            "interval_style": "postgres"
+          },
+          {
+            "is_superuser": "on"
+          },
+          {
+            "server_encoding": "UTF8"
+          },
+          {
+            "server_version": "13.6 (Debian 13.6-1.pgdg110+1)"
+          },
+          {
+            "session_authorization": "rules"
+          },
+          {
+            "standard_conforming_strings": "on"
+          },
+          {
+            "time_zone": "Etc/UTC"
+          }
+        ],
+        "process_id": 28954,
+        "secret_key": 889887985
+      }
+    }
+  }
+
+.. note::
+   In Suricata, the ``AuthenticationOk`` message is also where the backend's
+   ``process_id`` and ``secret_key`` are logged. These must be sent by the
+   frontend when it issues a ``CancelRequest`` message (seen below).
+
+A ``CancelRequest`` message::
+
+   {
+      "timestamp": "2023-12-07T15:46:56.971150+0000",
+      "flow_id": 775771889500133,
+      "event_type": "pgsql",
+      "src_ip": "100.88.2.140",
+      "src_port": 39706,
+      "dest_ip": "100.96.199.113",
+      "dest_port": 5432,
+      "proto": "TCP",
+      "pkt_src": "stream (flow timeout)",
+      "pgsql": {
+        "tx_id": 1,
+        "request": {
+          "message": "cancel_request",
+          "process_id": 28954,
+          "secret_key": 889887985
+        }
+      }
+   }
+
+.. note::
+   As the ``CancelRequest`` message is sent over a new connection, the way to
+   correlate it with the proper frontend/flow from which it originates is by
+   querying on ``process_id`` and ``secret_key`` seen in the
+   ``AuthenticationOk`` event.
+
+References:
+  * `PostgreSQL protocol - Canceling Requests in Progress`_
+  * `PostgreSQL message format - BackendKeyData`_
+
+.. _PostgreSQL protocol - Canceling Requests in Progress: https://www.postgresql
+   .org/docs/current/protocol-flow.html#PROTOCOL-FLOW-CANCELING-REQUESTS
+.. _PostgreSQL message format - BackendKeyData: https://www.postgresql.org/docs
+   /current/protocol-message-formats.html#PROTOCOL-MESSAGE-FORMATS-BACKENDKEYDATA
 
 
 Event type: IKE

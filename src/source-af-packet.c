@@ -490,14 +490,12 @@ TmEcode AFPPeersListCheck(void)
 static TmEcode AFPPeersListAdd(AFPThreadVars *ptv)
 {
     SCEnter();
-    AFPPeer *peer = SCMalloc(sizeof(AFPPeer));
+    AFPPeer *peer = SCCalloc(1, sizeof(AFPPeer));
     AFPPeer *pitem;
-    int mtu, out_mtu;
 
     if (unlikely(peer == NULL)) {
         SCReturnInt(TM_ECODE_FAILED);
     }
-    memset(peer, 0, sizeof(AFPPeer));
     SC_ATOMIC_INIT(peer->socket);
     SC_ATOMIC_INIT(peer->sock_usage);
     SC_ATOMIC_INIT(peer->if_idx);
@@ -527,12 +525,18 @@ static TmEcode AFPPeersListAdd(AFPThreadVars *ptv)
                 continue;
             peer->peer = pitem;
             pitem->peer = peer;
-            mtu = GetIfaceMTU(ptv->iface);
-            out_mtu = GetIfaceMTU(ptv->out_iface);
-            if (mtu != out_mtu) {
-                SCLogWarning("MTU on %s (%d) and %s (%d) are not equal, "
-                             "transmission of packets bigger than %d will fail.",
-                        ptv->iface, mtu, ptv->out_iface, out_mtu, MIN(out_mtu, mtu));
+
+            LiveDevice *iface = ptv->livedev;
+            DEBUG_VALIDATE_BUG_ON(iface == NULL);
+            DEBUG_VALIDATE_BUG_ON(strcmp(iface->dev, ptv->iface) != 0);
+            LiveDevice *out_iface = LiveGetDevice(ptv->out_iface);
+            if (out_iface == NULL)
+                FatalError("AF_PACKET device %s not found. Aborting..", ptv->out_iface);
+            if (iface->mtu != out_iface->mtu) {
+                SCLogWarning("MTU on %s (%d) and %s (%d) are not equal, transmission of packets "
+                             "bigger than %d will fail.",
+                        iface->dev, iface->mtu, out_iface->dev, out_iface->mtu,
+                        MIN(out_iface->mtu, iface->mtu));
             }
             peerslist.peered += 2;
             break;
@@ -1573,7 +1577,7 @@ sockaddr_ll) + ETH_HLEN) - ETH_HLEN);
     int snaplen = default_packet_size;
 
     if (snaplen == 0) {
-        snaplen = GetIfaceMaxPacketSize(ptv->iface);
+        snaplen = GetIfaceMaxPacketSize(ptv->livedev);
         if (snaplen <= 0) {
             SCLogWarning("%s: unable to get MTU, setting snaplen default of 1514", ptv->iface);
             snaplen = 1514;
@@ -1607,7 +1611,7 @@ static int AFPComputeRingParamsV3(AFPThreadVars *ptv)
     int snaplen = default_packet_size;
 
     if (snaplen == 0) {
-        snaplen = GetIfaceMaxPacketSize(ptv->iface);
+        snaplen = GetIfaceMaxPacketSize(ptv->livedev);
         if (snaplen <= 0) {
             SCLogWarning("%s: unable to get MTU, setting snaplen default of 1514", ptv->iface);
             snaplen = 1514;
@@ -2492,12 +2496,11 @@ TmEcode ReceiveAFPThreadInit(ThreadVars *tv, const void *initdata, void **data)
         SCReturnInt(TM_ECODE_FAILED);
     }
 
-    AFPThreadVars *ptv = SCMalloc(sizeof(AFPThreadVars));
+    AFPThreadVars *ptv = SCCalloc(1, sizeof(AFPThreadVars));
     if (unlikely(ptv == NULL)) {
         afpconfig->DerefFunc(afpconfig);
         SCReturnInt(TM_ECODE_FAILED);
     }
-    memset(ptv, 0, sizeof(AFPThreadVars));
 
     ptv->tv = tv;
 

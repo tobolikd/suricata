@@ -100,13 +100,11 @@ void DetectSipRequestLineRegister(void)
     sigmatch_table[DETECT_AL_SIP_REQUEST_LINE].Setup = DetectSipRequestLineSetup;
     sigmatch_table[DETECT_AL_SIP_REQUEST_LINE].flags |= SIGMATCH_NOOPT;
 
-    DetectAppLayerInspectEngineRegister2(BUFFER_NAME, ALPROTO_SIP,
-            SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister(BUFFER_NAME, ALPROTO_SIP, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOSERVER, 2,
-            PrefilterGenericMpmRegister, GetData, ALPROTO_SIP,
-	        1);
+    DetectAppLayerMpmRegister(BUFFER_NAME, SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister,
+            GetData, ALPROTO_SIP, 1);
 
     DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);
 

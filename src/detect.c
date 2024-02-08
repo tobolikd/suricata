@@ -209,8 +209,6 @@ const SigGroupHead *SigMatchSignaturesGetSgh(const DetectEngineCtx *de_ctx,
         const Packet *p)
 {
     SCEnter();
-
-    int f;
     SigGroupHead *sgh = NULL;
 
     /* if the packet proto is 0 (not set), we're inspecting it against
@@ -225,33 +223,30 @@ const SigGroupHead *SigMatchSignaturesGetSgh(const DetectEngineCtx *de_ctx,
     }
 
     /* select the flow_gh */
-    if (p->flowflags & FLOW_PKT_TOCLIENT)
-        f = 0;
-    else
-        f = 1;
+    const int dir = (p->flowflags & FLOW_PKT_TOCLIENT) == 0;
 
     int proto = IP_GET_IPPROTO(p);
     if (proto == IPPROTO_TCP) {
-        DetectPort *list = de_ctx->flow_gh[f].tcp;
-        SCLogDebug("tcp toserver %p, tcp toclient %p: going to use %p",
-                de_ctx->flow_gh[1].tcp, de_ctx->flow_gh[0].tcp, de_ctx->flow_gh[f].tcp);
-        uint16_t port = f ? p->dp : p->sp;
+        DetectPort *list = de_ctx->flow_gh[dir].tcp;
+        SCLogDebug("tcp toserver %p, tcp toclient %p: going to use %p", de_ctx->flow_gh[1].tcp,
+                de_ctx->flow_gh[0].tcp, de_ctx->flow_gh[dir].tcp);
+        const uint16_t port = dir ? p->dp : p->sp;
         SCLogDebug("tcp port %u -> %u:%u", port, p->sp, p->dp);
         DetectPort *sghport = DetectPortLookupGroup(list, port);
         if (sghport != NULL)
             sgh = sghport->sh;
-        SCLogDebug("TCP list %p, port %u, direction %s, sghport %p, sgh %p",
-                list, port, f ? "toserver" : "toclient", sghport, sgh);
+        SCLogDebug("TCP list %p, port %u, direction %s, sghport %p, sgh %p", list, port,
+                dir ? "toserver" : "toclient", sghport, sgh);
     } else if (proto == IPPROTO_UDP) {
-        DetectPort *list = de_ctx->flow_gh[f].udp;
-        uint16_t port = f ? p->dp : p->sp;
+        DetectPort *list = de_ctx->flow_gh[dir].udp;
+        uint16_t port = dir ? p->dp : p->sp;
         DetectPort *sghport = DetectPortLookupGroup(list, port);
         if (sghport != NULL)
             sgh = sghport->sh;
-        SCLogDebug("UDP list %p, port %u, direction %s, sghport %p, sgh %p",
-                list, port, f ? "toserver" : "toclient", sghport, sgh);
+        SCLogDebug("UDP list %p, port %u, direction %s, sghport %p, sgh %p", list, port,
+                dir ? "toserver" : "toclient", sghport, sgh);
     } else {
-        sgh = de_ctx->flow_gh[f].sgh[proto];
+        sgh = de_ctx->flow_gh[dir].sgh[proto];
     }
 
     SCReturnPtr(sgh, "SigGroupHead");
@@ -585,13 +580,11 @@ static void DetectRunInspectIPOnly(ThreadVars *tv, const DetectEngineCtx *de_ctx
     }
 }
 
-/* returns 0 if no match, 1 if match */
-static inline int DetectRunInspectRuleHeader(
-    const Packet *p,
-    const Flow *f,
-    const Signature *s,
-    const uint32_t sflags,
-    const uint8_t s_proto_flags)
+/** \internal
+ *  \brief inspect the rule header: protocol, ports, etc
+ *  \retval bool false if no match, true if match */
+static inline bool DetectRunInspectRuleHeader(const Packet *p, const Flow *f, const Signature *s,
+        const uint32_t sflags, const uint8_t s_proto_flags)
 {
     /* check if this signature has a requirement for flowvars of some type
      * and if so, if we actually have any in the flow. If not, the sig
@@ -599,77 +592,76 @@ static inline int DetectRunInspectRuleHeader(
     if ((p->flags & PKT_HAS_FLOW) && (sflags & SIG_FLAG_REQUIRE_FLOWVAR)) {
         DEBUG_VALIDATE_BUG_ON(f == NULL);
 
-        int m  = f->flowvar ? 1 : 0;
-
         /* no flowvars? skip this sig */
-        if (m == 0) {
+        const bool fv = f->flowvar != NULL;
+        if (fv == false) {
             SCLogDebug("skipping sig as the flow has no flowvars and sig "
                     "has SIG_FLAG_REQUIRE_FLOWVAR flag set.");
-            return 0;
+            return false;
         }
     }
 
     if ((s_proto_flags & DETECT_PROTO_IPV4) && !PKT_IS_IPV4(p)) {
         SCLogDebug("ip version didn't match");
-        return 0;
+        return false;
     }
     if ((s_proto_flags & DETECT_PROTO_IPV6) && !PKT_IS_IPV6(p)) {
         SCLogDebug("ip version didn't match");
-        return 0;
+        return false;
     }
 
     if (DetectProtoContainsProto(&s->proto, IP_GET_IPPROTO(p)) == 0) {
         SCLogDebug("proto didn't match");
-        return 0;
+        return false;
     }
 
     /* check the source & dst port in the sig */
     if (p->proto == IPPROTO_TCP || p->proto == IPPROTO_UDP || p->proto == IPPROTO_SCTP) {
         if (!(sflags & SIG_FLAG_DP_ANY)) {
             if (p->flags & PKT_IS_FRAGMENT)
-                return 0;
-            DetectPort *dport = DetectPortLookupGroup(s->dp,p->dp);
+                return false;
+            const DetectPort *dport = DetectPortLookupGroup(s->dp, p->dp);
             if (dport == NULL) {
                 SCLogDebug("dport didn't match.");
-                return 0;
+                return false;
             }
         }
         if (!(sflags & SIG_FLAG_SP_ANY)) {
             if (p->flags & PKT_IS_FRAGMENT)
-                return 0;
-            DetectPort *sport = DetectPortLookupGroup(s->sp,p->sp);
+                return false;
+            const DetectPort *sport = DetectPortLookupGroup(s->sp, p->sp);
             if (sport == NULL) {
                 SCLogDebug("sport didn't match.");
-                return 0;
+                return false;
             }
         }
     } else if ((sflags & (SIG_FLAG_DP_ANY|SIG_FLAG_SP_ANY)) != (SIG_FLAG_DP_ANY|SIG_FLAG_SP_ANY)) {
         SCLogDebug("port-less protocol and sig needs ports");
-        return 0;
+        return false;
     }
 
     /* check the destination address */
     if (!(sflags & SIG_FLAG_DST_ANY)) {
         if (PKT_IS_IPV4(p)) {
             if (DetectAddressMatchIPv4(s->addr_dst_match4, s->addr_dst_match4_cnt, &p->dst) == 0)
-                return 0;
+                return false;
         } else if (PKT_IS_IPV6(p)) {
             if (DetectAddressMatchIPv6(s->addr_dst_match6, s->addr_dst_match6_cnt, &p->dst) == 0)
-                return 0;
+                return false;
         }
     }
     /* check the source address */
     if (!(sflags & SIG_FLAG_SRC_ANY)) {
         if (PKT_IS_IPV4(p)) {
             if (DetectAddressMatchIPv4(s->addr_src_match4, s->addr_src_match4_cnt, &p->src) == 0)
-                return 0;
+                return false;
         } else if (PKT_IS_IPV6(p)) {
             if (DetectAddressMatchIPv6(s->addr_src_match6, s->addr_src_match6_cnt, &p->src) == 0)
-                return 0;
+                return false;
         }
     }
 
-    return 1;
+    return true;
 }
 
 /** \internal
@@ -796,7 +788,7 @@ static inline void DetectRulePacketRules(
             }
         }
 
-        if (DetectRunInspectRuleHeader(p, pflow, s, sflags, s_proto_flags) == 0) {
+        if (DetectRunInspectRuleHeader(p, pflow, s, sflags, s_proto_flags) == false) {
             goto next;
         }
 
@@ -1074,7 +1066,7 @@ static bool DetectRunTxInspectRule(ThreadVars *tv,
         RuleMatchCandidateTx *can,
         DetectRunScratchpad *scratch)
 {
-    uint8_t flow_flags = in_flow_flags;
+    const uint8_t flow_flags = in_flow_flags;
     const int direction = (flow_flags & STREAM_TOSERVER) ? 0 : 1;
     uint32_t inspect_flags = stored_flags ? *stored_flags : 0;
     int total_matches = 0;
@@ -1088,7 +1080,7 @@ static bool DetectRunTxInspectRule(ThreadVars *tv,
     /* for a new inspection we inspect pkt header and packet matches */
     if (likely(stored_flags == NULL)) {
         TRACE_SID_TXS(s->id, tx, "first inspect, run packet matches");
-        if (DetectRunInspectRuleHeader(p, f, s, s->flags, s->proto.flags) == 0) {
+        if (DetectRunInspectRuleHeader(p, f, s, s->flags, s->proto.flags) == false) {
             TRACE_SID_TXS(s->id, tx, "DetectRunInspectRuleHeader() no match");
             return false;
         }
@@ -1104,7 +1096,7 @@ static bool DetectRunTxInspectRule(ThreadVars *tv,
     }
 
     const DetectEngineAppInspectionEngine *engine = s->app_inspect;
-    while (engine != NULL) { // TODO could be do {} while as s->app_inspect cannot be null
+    do {
         TRACE_SID_TXS(s->id, tx, "engine %p inspect_flags %x", engine, inspect_flags);
         if (!(inspect_flags & BIT_U32(engine->id)) &&
                 direction == engine->dir)
@@ -1185,7 +1177,7 @@ static bool DetectRunTxInspectRule(ThreadVars *tv,
             break;
         }
         engine = engine->next;
-    }
+    } while (engine != NULL);
     TRACE_SID_TXS(s->id, tx, "inspect_flags %x, total_matches %u, engine %p",
             inspect_flags, total_matches, engine);
 
@@ -1650,10 +1642,10 @@ static void DetectRunFrames(ThreadVars *tv, DetectEngineCtx *de_ctx, DetectEngin
 
             /* call individual rule inspection */
             RULE_PROFILING_START(p);
-            int r = DetectRunInspectRuleHeader(p, f, s, s->flags, s->proto.flags);
-            if (r == 1) {
+            bool r = DetectRunInspectRuleHeader(p, f, s, s->flags, s->proto.flags);
+            if (r == true) {
                 r = DetectRunFrameInspectRule(tv, det_ctx, s, f, p, frames, frame);
-                if (r == 1) {
+                if (r == true) {
                     /* match */
                     DetectRunPostMatch(tv, det_ctx, p, s);
 
@@ -1804,9 +1796,11 @@ TmEcode Detect(ThreadVars *tv, Packet *p, void *data)
 
 #ifdef PROFILE_RULES
     /* aggregate statistics */
-    if (SCTIME_SECS(p->ts) != det_ctx->rule_perf_last_sync) {
+    struct timeval ts;
+    gettimeofday(&ts, NULL);
+    if (ts.tv_sec != det_ctx->rule_perf_last_sync) {
         SCProfilingRuleThreatAggregate(det_ctx);
-        det_ctx->rule_perf_last_sync = SCTIME_SECS(p->ts);
+        det_ctx->rule_perf_last_sync = ts.tv_sec;
     }
 #endif
 

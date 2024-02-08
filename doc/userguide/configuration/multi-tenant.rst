@@ -21,6 +21,7 @@ Settings:
 * `selector`: direct (for unix socket pcap processing, see below), VLAN or device
 * `loaders`: number of `loader` threads, for parallel tenant loading at startup
 * `tenants`: list of tenants
+* `config-path`: path from where the tenant yamls are loaded
 
   * id: tenant id (numeric values only)
   * yaml: separate yaml file with the tenant specific settings
@@ -216,6 +217,29 @@ Tenants can be mapped to vlan ids.
 
 The registration of tenant and tenant handlers can be done on a
 running engine.
+
+Reloads
+~~~~~~~
+
+Reloading all tenants:
+
+``reload-tenants``
+
+::
+
+  reload-tenants
+
+Reloading a single tenant:
+
+``reload-tenant <tenant id> [yaml path]``
+
+::
+
+  reload-tenant 1 tenant-1.yaml
+  reload-tenant 5
+
+The ``[yaml path]`` is optional. If it isn't provided, the original path of
+the tenant will be used during the reload.
 
 Eve JSON output
 ---------------

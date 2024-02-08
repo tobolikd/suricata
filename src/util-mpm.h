@@ -34,7 +34,6 @@ enum {
 
     /* aho-corasick */
     MPM_AC,
-    MPM_AC_BS,
     MPM_AC_KS,
     MPM_HS,
     /* table size */
@@ -160,11 +159,13 @@ typedef struct MpmTableElmt_ {
     int  (*AddPattern)(struct MpmCtx_ *, uint8_t *, uint16_t, uint16_t, uint16_t, uint32_t, SigIntId, uint8_t);
     int  (*AddPatternNocase)(struct MpmCtx_ *, uint8_t *, uint16_t, uint16_t, uint16_t, uint32_t, SigIntId, uint8_t);
     int  (*Prepare)(struct MpmCtx_ *);
+    /** \retval cnt number of patterns that matches: once per pattern max. */
     uint32_t (*Search)(const struct MpmCtx_ *, struct MpmThreadCtx_ *, PrefilterRuleStore *, const uint8_t *, uint32_t);
     void (*PrintCtx)(struct MpmCtx_ *);
     void (*PrintThreadCtx)(struct MpmThreadCtx_ *);
+#ifdef UNITTESTS
     void (*RegisterUnittests)(void);
-    uint8_t flags;
+#endif
 } MpmTableElmt;
 
 extern MpmTableElmt mpm_table[MPM_TABLE_SIZE];
@@ -184,6 +185,7 @@ void MpmRegisterTests(void);
 
 void MpmInitCtx(MpmCtx *mpm_ctx, uint8_t matcher);
 void MpmInitThreadCtx(MpmThreadCtx *mpm_thread_ctx, uint16_t);
+void MpmDestroyThreadCtx(MpmThreadCtx *mpm_thread_ctx, const uint16_t matcher);
 
 int MpmAddPatternCS(struct MpmCtx_ *mpm_ctx, uint8_t *pat, uint16_t patlen,
                     uint16_t offset, uint16_t depth,

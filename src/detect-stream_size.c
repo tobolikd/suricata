@@ -146,16 +146,11 @@ static int DetectStreamSizeSetup (DetectEngineCtx *de_ctx, Signature *s, const c
     if (sd == NULL)
         return -1;
 
-    SigMatch *sm = SigMatchAlloc();
-    if (sm == NULL) {
+    if (SigMatchAppendSMToList(
+                de_ctx, s, DETECT_STREAM_SIZE, (SigMatchCtx *)sd, DETECT_SM_LIST_MATCH) == NULL) {
         DetectStreamSizeFree(de_ctx, sd);
         return -1;
     }
-
-    sm->type = DETECT_STREAM_SIZE;
-    sm->ctx = (SigMatchCtx *)sd;
-
-    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
     return 0;
 }
 
@@ -216,7 +211,7 @@ static bool PrefilterPacketStreamSizeCompare(PrefilterPacketHeaderValue v, void 
 
 static int PrefilterSetupStreamSize(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
 {
-    return PrefilterSetupPacketHeader(de_ctx, sgh, DETECT_TCPMSS, PrefilterPacketStreamSizeSet,
+    return PrefilterSetupPacketHeader(de_ctx, sgh, DETECT_STREAM_SIZE, PrefilterPacketStreamSizeSet,
             PrefilterPacketStreamSizeCompare, PrefilterPacketStreamsizeMatch);
 }
 

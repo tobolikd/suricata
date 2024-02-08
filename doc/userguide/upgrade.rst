@@ -34,6 +34,10 @@ also check all the new features that have been added but are not covered by
 this guide. Those features are either not enabled by default or require
 dedicated new configuration.
 
+Upgrading 7.0 to 8.0
+--------------------
+.. note:: ``stats.whitelist`` has been renamed to ``stats.score`` in ``eve.json``
+
 Upgrading 6.0 to 7.0
 --------------------
 
@@ -174,6 +178,12 @@ Removals
   ``stats-json``, ``dns-json``, etc. Use multiple Eve logger instances
   if this behavior is still required. See :ref:`multiple-eve-instances`.
 - Unified2 has been removed. See :ref:`unified2-removed`.
+
+Performance
+~~~~~~~~~~~
+- In YAML files w/o a `flow-timeouts.tcp.closed` setting, the default went from 0 to 10 seconds.
+  This may lead to higher than expected TCP memory use:
+  https://redmine.openinfosecfoundation.org/issues/6552
 
 Upgrading 4.1 to 5.0
 --------------------

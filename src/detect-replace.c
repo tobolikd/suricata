@@ -156,15 +156,9 @@ int DetectReplaceSetup(DetectEngineCtx *de_ctx, Signature *s, const char *replac
     SCFree(content);
     content = NULL;
 
-    SigMatch *sm = SigMatchAlloc();
-    if (unlikely(sm == NULL)) {
-        SCFree(ud->replace);
-        ud->replace = NULL;
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_REPLACE, NULL, DETECT_SM_LIST_POSTMATCH) == NULL) {
         goto error;
     }
-    sm->type = DETECT_REPLACE;
-    sm->ctx = NULL;
-    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_POSTMATCH);
     return 0;
 
 error:
@@ -182,27 +176,22 @@ error:
  * earlier changes. Thus the highest priority modifications should be
  * applied last.
  */
-DetectReplaceList *DetectReplaceAddToList(DetectReplaceList *replist,
-                                          uint8_t *found,
-                                          DetectContentData *cd)
+DetectReplaceList *DetectReplaceAddToList(
+        DetectReplaceList *replist, uint8_t *found, const DetectContentData *cd)
 {
-    DetectReplaceList *newlist;
-
     if (cd->content_len != cd->replace_len)
         return NULL;
     SCLogDebug("replace: Adding match");
 
-    newlist = SCMalloc(sizeof(DetectReplaceList));
+    DetectReplaceList *newlist = SCMalloc(sizeof(DetectReplaceList));
     if (unlikely(newlist == NULL))
         return replist;
     newlist->found = found;
     newlist->cd = cd;
     /* Push new value onto the front of the list. */
     newlist->next = replist;
-
     return newlist;
 }
-
 
 void DetectReplaceExecuteInternal(Packet *p, DetectReplaceList *replist)
 {

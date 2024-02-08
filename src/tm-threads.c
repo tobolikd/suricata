@@ -156,9 +156,11 @@ TmEcode TmThreadsSlotVarRun(ThreadVars *tv, Packet *p, TmSlot *slot)
             TmThreadsSlotProcessPktFail(tv, s, NULL);
             return TM_ECODE_FAILED;
         }
-
-        if (TmThreadsProcessDecodePseudoPackets(tv, &tv->decode_pq, s->slot_next) != TM_ECODE_OK) {
-            return TM_ECODE_FAILED;
+        if (s->tm_flags & TM_FLAG_DECODE_TM) {
+            if (TmThreadsProcessDecodePseudoPackets(tv, &tv->decode_pq, s->slot_next) !=
+                    TM_ECODE_OK) {
+                return TM_ECODE_FAILED;
+            }
         }
     }
 
@@ -675,10 +677,9 @@ error:
  */
 void TmSlotSetFuncAppend(ThreadVars *tv, TmModule *tm, const void *data)
 {
-    TmSlot *slot = SCMalloc(sizeof(TmSlot));
+    TmSlot *slot = SCCalloc(1, sizeof(TmSlot));
     if (unlikely(slot == NULL))
         return;
-    memset(slot, 0, sizeof(TmSlot));
     SC_ATOMIC_INITPTR(slot->slot_data);
     slot->SlotThreadInit = tm->ThreadInit;
     slot->slot_initdata = data;
@@ -697,6 +698,7 @@ void TmSlotSetFuncAppend(ThreadVars *tv, TmModule *tm, const void *data)
     /* we don't have to check for the return value "-1".  We wouldn't have
      * received a TM as arg, if it didn't exist */
     slot->tm_id = TmModuleGetIDForTM(tm);
+    slot->tm_flags |= tm->flags;
 
     tv->tmm_flags |= tm->flags;
     tv->cap_flags |= tm->cap_flags;
@@ -956,10 +958,9 @@ ThreadVars *TmThreadCreate(const char *name, const char *inq_name, const char *i
     SCLogDebug("creating thread \"%s\"...", name);
 
     /* XXX create separate function for this: allocate a thread container */
-    tv = SCMalloc(sizeof(ThreadVars));
+    tv = SCCalloc(1, sizeof(ThreadVars));
     if (unlikely(tv == NULL))
         goto error;
-    memset(tv, 0, sizeof(ThreadVars));
 
     SC_ATOMIC_INIT(tv->flags);
     SCMutexInit(&tv->perf_public_ctx.m, NULL);

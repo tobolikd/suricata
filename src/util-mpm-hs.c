@@ -60,7 +60,9 @@ uint32_t SCHSSearch(const MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx,
                     PrefilterRuleStore *pmq, const uint8_t *buf, const uint32_t buflen);
 void SCHSPrintInfo(MpmCtx *mpm_ctx);
 void SCHSPrintSearchStats(MpmThreadCtx *mpm_thread_ctx);
-void SCHSRegisterTests(void);
+#ifdef UNITTESTS
+static void SCHSRegisterTests(void);
+#endif
 
 /* size of the hash table used to speed up pattern insertions initially */
 #define INIT_HASH_SIZE 65536
@@ -178,11 +180,10 @@ static inline SCHSPattern *SCHSInitHashLookup(SCHSCtx *ctx, uint8_t *pat,
  */
 static inline SCHSPattern *SCHSAllocPattern(MpmCtx *mpm_ctx)
 {
-    SCHSPattern *p = SCMalloc(sizeof(SCHSPattern));
+    SCHSPattern *p = SCCalloc(1, sizeof(SCHSPattern));
     if (unlikely(p == NULL)) {
         exit(EXIT_FAILURE);
     }
-    memset(p, 0, sizeof(SCHSPattern));
 
     mpm_ctx->memory_cnt++;
     mpm_ctx->memory_size += sizeof(SCHSPattern);
@@ -380,37 +381,32 @@ typedef struct SCHSCompileData_ {
 
 static SCHSCompileData *SCHSAllocCompileData(unsigned int pattern_cnt)
 {
-    SCHSCompileData *cd = SCMalloc(pattern_cnt * sizeof(SCHSCompileData));
+    SCHSCompileData *cd = SCCalloc(pattern_cnt, sizeof(SCHSCompileData));
     if (cd == NULL) {
         goto error;
     }
-    memset(cd, 0, pattern_cnt * sizeof(SCHSCompileData));
 
     cd->pattern_cnt = pattern_cnt;
 
-    cd->ids = SCMalloc(pattern_cnt * sizeof(unsigned int));
+    cd->ids = SCCalloc(pattern_cnt, sizeof(unsigned int));
     if (cd->ids == NULL) {
         goto error;
     }
-    memset(cd->ids, 0, pattern_cnt * sizeof(unsigned int));
 
-    cd->flags = SCMalloc(pattern_cnt * sizeof(unsigned int));
+    cd->flags = SCCalloc(pattern_cnt, sizeof(unsigned int));
     if (cd->flags == NULL) {
         goto error;
     }
-    memset(cd->flags, 0, pattern_cnt * sizeof(unsigned int));
 
-    cd->expressions = SCMalloc(pattern_cnt * sizeof(char *));
+    cd->expressions = SCCalloc(pattern_cnt, sizeof(char *));
     if (cd->expressions == NULL) {
         goto error;
     }
-    memset(cd->expressions, 0, pattern_cnt * sizeof(char *));
 
-    cd->ext = SCMalloc(pattern_cnt * sizeof(hs_expr_ext_t *));
+    cd->ext = SCCalloc(pattern_cnt, sizeof(hs_expr_ext_t *));
     if (cd->ext == NULL) {
         goto error;
     }
-    memset(cd->ext, 0, pattern_cnt * sizeof(hs_expr_ext_t *));
 
     return cd;
 
@@ -556,23 +552,20 @@ static void PatternDatabaseTableFree(void *data)
 
 static PatternDatabase *PatternDatabaseAlloc(uint32_t pattern_cnt)
 {
-    PatternDatabase *pd = SCMalloc(sizeof(PatternDatabase));
+    PatternDatabase *pd = SCCalloc(1, sizeof(PatternDatabase));
     if (pd == NULL) {
         return NULL;
     }
-    memset(pd, 0, sizeof(PatternDatabase));
     pd->pattern_cnt = pattern_cnt;
     pd->ref_cnt = 0;
     pd->hs_db = NULL;
 
     /* alloc the pattern array */
-    pd->parray =
-        (SCHSPattern **)SCMalloc(pd->pattern_cnt * sizeof(SCHSPattern *));
+    pd->parray = (SCHSPattern **)SCCalloc(pd->pattern_cnt, sizeof(SCHSPattern *));
     if (pd->parray == NULL) {
         SCFree(pd);
         return NULL;
     }
-    memset(pd->parray, 0, pd->pattern_cnt * sizeof(SCHSPattern *));
 
     return pd;
 }
@@ -667,12 +660,11 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
         cd->expressions[i] = HSRenderPattern(p->original_pat, p->len);
 
         if (p->flags & (MPM_PATTERN_FLAG_OFFSET | MPM_PATTERN_FLAG_DEPTH)) {
-            cd->ext[i] = SCMalloc(sizeof(hs_expr_ext_t));
+            cd->ext[i] = SCCalloc(1, sizeof(hs_expr_ext_t));
             if (cd->ext[i] == NULL) {
                 SCMutexUnlock(&g_db_table_mutex);
                 goto error;
             }
-            memset(cd->ext[i], 0, sizeof(hs_expr_ext_t));
 
             if (p->flags & MPM_PATTERN_FLAG_OFFSET) {
                 cd->ext[i]->flags |= HS_EXT_FLAG_MIN_OFFSET;
@@ -756,13 +748,12 @@ void SCHSInitThreadCtx(MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx)
 {
     memset(mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
 
-    SCHSThreadCtx *ctx = SCMalloc(sizeof(SCHSThreadCtx));
+    SCHSThreadCtx *ctx = SCCalloc(1, sizeof(SCHSThreadCtx));
     if (ctx == NULL) {
         exit(EXIT_FAILURE);
     }
     mpm_thread_ctx->ctx = ctx;
 
-    memset(ctx, 0, sizeof(SCHSThreadCtx));
     mpm_thread_ctx->memory_cnt++;
     mpm_thread_ctx->memory_size += sizeof(SCHSThreadCtx);
 
@@ -807,22 +798,20 @@ void SCHSInitCtx(MpmCtx *mpm_ctx)
     if (mpm_ctx->ctx != NULL)
         return;
 
-    mpm_ctx->ctx = SCMalloc(sizeof(SCHSCtx));
+    mpm_ctx->ctx = SCCalloc(1, sizeof(SCHSCtx));
     if (mpm_ctx->ctx == NULL) {
         exit(EXIT_FAILURE);
     }
-    memset(mpm_ctx->ctx, 0, sizeof(SCHSCtx));
 
     mpm_ctx->memory_cnt++;
     mpm_ctx->memory_size += sizeof(SCHSCtx);
 
     /* initialize the hash we use to speed up pattern insertions */
     SCHSCtx *ctx = (SCHSCtx *)mpm_ctx->ctx;
-    ctx->init_hash = SCMalloc(sizeof(SCHSPattern *) * INIT_HASH_SIZE);
+    ctx->init_hash = SCCalloc(INIT_HASH_SIZE, sizeof(SCHSPattern *));
     if (ctx->init_hash == NULL) {
         exit(EXIT_FAILURE);
     }
-    memset(ctx->init_hash, 0, sizeof(SCHSPattern *) * INIT_HASH_SIZE);
 }
 
 /**
@@ -884,6 +873,7 @@ void SCHSDestroyCtx(MpmCtx *mpm_ctx)
     SCMutexUnlock(&g_db_table_mutex);
 
     SCFree(mpm_ctx->ctx);
+    mpm_ctx->ctx = NULL;
     mpm_ctx->memory_cnt--;
     mpm_ctx->memory_size -= sizeof(SCHSCtx);
 }
@@ -1062,8 +1052,9 @@ void MpmHSRegister(void)
     mpm_table[MPM_HS].Search = SCHSSearch;
     mpm_table[MPM_HS].PrintCtx = SCHSPrintInfo;
     mpm_table[MPM_HS].PrintThreadCtx = SCHSPrintSearchStats;
+#ifdef UNITTESTS
     mpm_table[MPM_HS].RegisterUnittests = SCHSRegisterTests;
-
+#endif
     /* Set Hyperscan memory allocators */
     SCHSSetAllocators();
 }
@@ -2145,11 +2136,8 @@ end:
     return result;
 }
 
-#endif /* UNITTESTS */
-
-void SCHSRegisterTests(void)
+static void SCHSRegisterTests(void)
 {
-#ifdef UNITTESTS
     UtRegisterTest("SCHSTest01", SCHSTest01);
     UtRegisterTest("SCHSTest02", SCHSTest02);
     UtRegisterTest("SCHSTest03", SCHSTest03);
@@ -2179,9 +2167,6 @@ void SCHSRegisterTests(void)
     UtRegisterTest("SCHSTest27", SCHSTest27);
     UtRegisterTest("SCHSTest28", SCHSTest28);
     UtRegisterTest("SCHSTest29", SCHSTest29);
-#endif
-
-    return;
 }
-
+#endif /* UNITTESTS */
 #endif /* BUILD_HYPERSCAN */

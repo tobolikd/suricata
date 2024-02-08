@@ -453,7 +453,7 @@ void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
             el->pectx = NULL; // e now owns the ctx
             e->gid = el->gid;
             if (el->next == NULL) {
-                e->is_last = TRUE;
+                e->is_last = true;
             }
             e++;
         }
@@ -477,7 +477,7 @@ void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
             el->pectx = NULL; // e now owns the ctx
             e->gid = el->gid;
             if (el->next == NULL) {
-                e->is_last = TRUE;
+                e->is_last = true;
             }
             e++;
         }
@@ -579,7 +579,7 @@ void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
             el->pectx = NULL; // e now owns the ctx
             e->gid = el->gid;
             if (el->next == NULL) {
-                e->is_last = TRUE;
+                e->is_last = true;
             }
             e++;
         }
@@ -731,8 +731,8 @@ static void PrefilterMpm(DetectEngineThreadCtx *det_ctx, const void *pectx, Pack
     //PrintRawDataFp(stdout, data, data_len);
 
     if (data != NULL && data_len >= mpm_ctx->minlen) {
-        (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx,
-                &det_ctx->mtcu, &det_ctx->pmq, data, data_len);
+        (void)mpm_table[mpm_ctx->mpm_type].Search(
+                mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, data, data_len);
         PREFILTER_PROFILING_ADD_BYTES(det_ctx, data_len);
     }
 }
@@ -801,8 +801,8 @@ static void PrefilterMpmPkt(DetectEngineThreadCtx *det_ctx,
     //PrintRawDataFp(stdout, data, data_len);
 
     if (data != NULL && data_len >= mpm_ctx->minlen) {
-        (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx,
-                &det_ctx->mtcu, &det_ctx->pmq, data, data_len);
+        (void)mpm_table[mpm_ctx->mpm_type].Search(
+                mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, data, data_len);
         PREFILTER_PROFILING_ADD_BYTES(det_ctx, data_len);
     }
 }

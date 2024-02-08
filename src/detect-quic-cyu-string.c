@@ -104,14 +104,10 @@ static uint8_t DetectEngineInspectQuicString(DetectEngineCtx *de_ctx,
         if (buffer == NULL || buffer->inspect == NULL)
             break;
 
-        det_ctx->buffer_offset = 0;
-        det_ctx->discontinue_matching = 0;
-        det_ctx->inspection_recursion_counter = 0;
-
-        const int match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f,
-                (uint8_t *)buffer->inspect, buffer->inspect_len, buffer->inspect_offset,
+        const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f,
+                buffer->inspect, buffer->inspect_len, buffer->inspect_offset,
                 DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-        if (match == 1) {
+        if (match) {
             return DETECT_ENGINE_INSPECT_SIG_MATCH;
         }
         local_id++;
@@ -147,7 +143,7 @@ static void PrefilterTxQuicString(DetectEngineThreadCtx *det_ctx, const void *pe
 
         if (buffer->inspect_len >= mpm_ctx->minlen) {
             (void)mpm_table[mpm_ctx->mpm_type].Search(
-                    mpm_ctx, &det_ctx->mtcu, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
+                    mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
             PREFILTER_PROFILING_ADD_BYTES(det_ctx, buffer->inspect_len);
         }
 
@@ -187,10 +183,10 @@ void DetectQuicCyuStringRegister(void)
     sigmatch_table[DETECT_AL_QUIC_CYU_STRING].RegisterTests = DetectQuicCyuStringRegisterTests;
 #endif
 
-    DetectAppLayerMpmRegister2(
+    DetectAppLayerMpmRegister(
             BUFFER_NAME, SIG_FLAG_TOSERVER, 2, PrefilterMpmListIdRegister, NULL, ALPROTO_QUIC, 1);
 
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             BUFFER_NAME, ALPROTO_QUIC, SIG_FLAG_TOSERVER, 0, DetectEngineInspectQuicString, NULL);
 
     DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);

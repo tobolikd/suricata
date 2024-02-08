@@ -73,7 +73,7 @@ void DetectFiledataRegister(void)
     sigmatch_table[DETECT_FILE_DATA].name = "file.data";
     sigmatch_table[DETECT_FILE_DATA].alias = "file_data";
     sigmatch_table[DETECT_FILE_DATA].desc = "make content keywords match on file data";
-    sigmatch_table[DETECT_FILE_DATA].url = "/rules/http-keywords.html#file-data";
+    sigmatch_table[DETECT_FILE_DATA].url = "/rules/file-keywords.html#file-data";
     sigmatch_table[DETECT_FILE_DATA].Setup = DetectFiledataSetup;
 #ifdef UNITTESTS
     sigmatch_table[DETECT_FILE_DATA].RegisterTests = DetectFiledataRegisterTests;
@@ -401,7 +401,6 @@ uint8_t DetectEngineInspectFiledata(DetectEngineCtx *de_ctx, DetectEngineThreadC
         return DETECT_ENGINE_INSPECT_SIG_CANT_MATCH_FILES;
     }
 
-    bool match = false;
     int local_file_id = 0;
     File *file = ffc->head;
     for (; file != NULL; file = file->next) {
@@ -415,25 +414,16 @@ uint8_t DetectEngineInspectFiledata(DetectEngineCtx *de_ctx, DetectEngineThreadC
         if (buffer->inspect_offset == 0)
             ciflags |= DETECT_CI_FLAGS_START;
 
-        det_ctx->buffer_offset = 0;
-        det_ctx->discontinue_matching = 0;
-        det_ctx->inspection_recursion_counter = 0;
-        match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd,
-                                              NULL, f,
-                                              (uint8_t *)buffer->inspect,
-                                              buffer->inspect_len,
-                                              buffer->inspect_offset, ciflags,
-                                              DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
+        const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f,
+                buffer->inspect, buffer->inspect_len, buffer->inspect_offset, ciflags,
+                DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
         if (match) {
-            break;
+            return DETECT_ENGINE_INSPECT_SIG_MATCH;
         }
         local_file_id++;
     }
 
-    if (match)
-        return DETECT_ENGINE_INSPECT_SIG_MATCH;
-    else
-        return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
+    return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
 }
 
 /** \brief Filedata Filedata Mpm prefilter callback
@@ -471,8 +461,7 @@ static void PrefilterTxFiledata(DetectEngineThreadCtx *det_ctx, const void *pect
 
             if (buffer->inspect_len >= mpm_ctx->minlen) {
                 uint32_t prev_rule_id_array_cnt = det_ctx->pmq.rule_id_array_cnt;
-                (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx,
-                        &det_ctx->mtcu, &det_ctx->pmq,
+                (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx, &det_ctx->mtc, &det_ctx->pmq,
                         buffer->inspect, buffer->inspect_len);
                 PREFILTER_PROFILING_ADD_BYTES(det_ctx, buffer->inspect_len);
 

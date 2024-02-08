@@ -88,7 +88,7 @@ void DetectEngineBufferTypeSupportsMpm(DetectEngineCtx *de_ctx, const char *name
 void DetectEngineBufferTypeSupportsTransformations(DetectEngineCtx *de_ctx, const char *name);
 
 /* prototypes */
-DetectEngineCtx *DetectEngineCtxInitWithPrefix(const char *prefix);
+DetectEngineCtx *DetectEngineCtxInitWithPrefix(const char *prefix, uint32_t tenant_id);
 DetectEngineCtx *DetectEngineCtxInit(void);
 DetectEngineCtx *DetectEngineCtxInitStubForDD(void);
 DetectEngineCtx *DetectEngineCtxInitStubForMT(void);
@@ -114,6 +114,7 @@ DetectEngineCtx *DetectEngineGetCurrent(void);
 DetectEngineCtx *DetectEngineGetByTenantId(uint32_t tenant_id);
 void DetectEnginePruneFreeList(void);
 int DetectEngineMoveToFreeList(DetectEngineCtx *de_ctx);
+void DetectEngineClearMaster(void);
 DetectEngineCtx *DetectEngineReference(DetectEngineCtx *);
 void DetectEngineDeReference(DetectEngineCtx **de_ctx);
 int DetectEngineReload(const SCInstance *suri);
@@ -129,6 +130,7 @@ int DetectEngineReloadIsIdle(void);
 
 int DetectEngineLoadTenantBlocking(uint32_t tenant_id, const char *yaml);
 int DetectEngineReloadTenantBlocking(uint32_t tenant_id, const char *yaml, int reload_cnt);
+int DetectEngineReloadTenantsBlocking(const int reload_cnt);
 
 int DetectEngineTenantRegisterLivedev(uint32_t tenant_id, int device_id);
 int DetectEngineTenantRegisterVlanId(uint32_t tenant_id, uint16_t vlan_id);
@@ -159,10 +161,8 @@ int DetectEngineInspectPktBufferGeneric(
  * \param progress Minimal progress value for inspect engine to run
  * \param Callback The engine callback.
  */
-void DetectAppLayerInspectEngineRegister2(const char *name,
-        AppProto alproto, uint32_t dir, int progress,
-        InspectEngineFuncPtr2 Callback2,
-        InspectionBufferGetDataPtr GetData);
+void DetectAppLayerInspectEngineRegister(const char *name, AppProto alproto, uint32_t dir,
+        int progress, InspectEngineFuncPtr Callback2, InspectionBufferGetDataPtr GetData);
 
 void DetectPktInspectEngineRegister(const char *name,
         InspectionBufferGetPktDataPtr GetPktData,

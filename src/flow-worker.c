@@ -96,8 +96,8 @@ typedef struct FlowWorkerThreadData_ {
 
 } FlowWorkerThreadData;
 
-static void FlowWorkerFlowTimeout(ThreadVars *tv, Packet *p, FlowWorkerThreadData *fw, void *detect_thread);
-Packet *FlowForceReassemblyPseudoPacketGet(int direction, Flow *f, TcpSession *ssn);
+static void FlowWorkerFlowTimeout(
+        ThreadVars *tv, Packet *p, FlowWorkerThreadData *fw, void *detect_thread);
 
 /**
  * \internal
@@ -111,64 +111,44 @@ Packet *FlowForceReassemblyPseudoPacketGet(int direction, Flow *f, TcpSession *s
  */
 static int FlowFinish(ThreadVars *tv, Flow *f, FlowWorkerThreadData *fw, void *detect_thread)
 {
-    Packet *p1 = NULL, *p2 = NULL;
     const int server = f->ffr_tc;
     const int client = f->ffr_ts;
+    int cnt = 0;
 
     /* Get the tcp session for the flow */
-    TcpSession *ssn = (TcpSession *)f->protoctx;
-
-    /* The packets we use are based on what segments in what direction are
-     * unprocessed.
-     * p1 if we have client segments for reassembly purpose only.  If we
-     * have no server segments p2 can be a toserver packet with dummy
-     * seq/ack, and if we have server segments p2 has to carry out reassembly
-     * for server segment as well, in which case we will also need a p3 in the
-     * toclient which is now dummy since all we need it for is detection */
+    const TcpSession *ssn = (TcpSession *)f->protoctx;
 
     /* insert a pseudo packet in the toserver direction */
     if (client == STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION) {
-        p1 = FlowForceReassemblyPseudoPacketGet(0, f, ssn);
-        if (p1 == NULL) {
-            return 0;
-        }
-        PKT_SET_SRC(p1, PKT_SRC_FFR);
-
-        if (server == STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION) {
-            p2 = FlowForceReassemblyPseudoPacketGet(1, f, ssn);
-            if (p2 == NULL) {
-                FlowDeReference(&p1->flow);
-                TmqhOutputPacketpool(NULL, p1);
-                return 0;
+        Packet *p = FlowForceReassemblyPseudoPacketGet(0, f, ssn);
+        if (p != NULL) {
+            PKT_SET_SRC(p, PKT_SRC_FFR);
+            if (server == STREAM_HAS_UNPROCESSED_SEGMENTS_NONE) {
+                p->flowflags |= FLOW_PKT_LAST_PSEUDO;
             }
-            PKT_SET_SRC(p2, PKT_SRC_FFR);
-            p2->flowflags |= FLOW_PKT_LAST_PSEUDO;
-        } else {
-            p1->flowflags |= FLOW_PKT_LAST_PSEUDO;
-        }
-    } else {
-        if (server == STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION) {
-            p1 = FlowForceReassemblyPseudoPacketGet(1, f, ssn);
-            if (p1 == NULL) {
-                return 0;
-            }
-            PKT_SET_SRC(p1, PKT_SRC_FFR);
-            p1->flowflags |= FLOW_PKT_LAST_PSEUDO;
-        } else {
-            /* impossible */
-            BUG_ON(1);
+            FlowWorkerFlowTimeout(tv, p, fw, detect_thread);
+            PacketPoolReturnPacket(p);
+            cnt++;
         }
     }
-    f->flags |= FLOW_TIMEOUT_REASSEMBLY_DONE;
 
-    FlowWorkerFlowTimeout(tv, p1, fw, detect_thread);
-    PacketPoolReturnPacket(p1);
-    if (p2) {
-        FlowWorkerFlowTimeout(tv, p2, fw, detect_thread);
-        PacketPoolReturnPacket(p2);
-        return 2;
+    /* handle toclient */
+    if (server == STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION) {
+        Packet *p = FlowForceReassemblyPseudoPacketGet(1, f, ssn);
+        if (p != NULL) {
+            PKT_SET_SRC(p, PKT_SRC_FFR);
+            p->flowflags |= FLOW_PKT_LAST_PSEUDO;
+            FlowWorkerFlowTimeout(tv, p, fw, detect_thread);
+            PacketPoolReturnPacket(p);
+            f->flags |= FLOW_TIMEOUT_REASSEMBLY_DONE;
+            cnt++;
+        }
     }
-    return 1;
+
+    if (cnt > 0) {
+        f->flags |= FLOW_TIMEOUT_REASSEMBLY_DONE;
+    }
+    return cnt;
 }
 
 extern uint32_t flow_spare_pool_block_size;

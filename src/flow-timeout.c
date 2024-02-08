@@ -76,10 +76,8 @@
  *                  packets need to force reassembly, in which case we just
  *                  set dummy ack/seq values.
  */
-static inline Packet *FlowForceReassemblyPseudoPacketSetup(Packet *p,
-                                                           int direction,
-                                                           Flow *f,
-                                                           TcpSession *ssn)
+static inline Packet *FlowForceReassemblyPseudoPacketSetup(
+        Packet *p, int direction, Flow *f, const TcpSession *ssn)
 {
     const int orig_dir = direction;
     p->tenant_id = f->tenant_id;
@@ -265,12 +263,7 @@ error:
     return NULL;
 }
 
-Packet *FlowForceReassemblyPseudoPacketGet(int direction,
-                                                         Flow *f,
-                                                         TcpSession *ssn);
-Packet *FlowForceReassemblyPseudoPacketGet(int direction,
-                                                         Flow *f,
-                                                         TcpSession *ssn)
+Packet *FlowForceReassemblyPseudoPacketGet(int direction, Flow *f, const TcpSession *ssn)
 {
     PacketPoolWait();
     Packet *p = PacketPoolGetPacket();
@@ -370,8 +363,6 @@ static inline void FlowForceReassemblyForHash(void)
 {
     for (uint32_t idx = 0; idx < flow_config.hash_size; idx++) {
         FlowBucket *fb = &flow_hash[idx];
-
-        PacketPoolWaitForN(9);
         FBLOCK_LOCK(fb);
 
         Flow *f = fb->head;
@@ -380,7 +371,6 @@ static inline void FlowForceReassemblyForHash(void)
         /* we need to loop through all the flows in the queue */
         while (f != NULL) {
             Flow *next_f = f->next;
-            PacketPoolWaitForN(3);
 
             FLOWLOCK_WRLOCK(f);
 

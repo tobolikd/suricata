@@ -69,10 +69,10 @@ void DetectKrb5MsgTypeRegister(void)
     sigmatch_table[DETECT_AL_KRB5_MSGTYPE].RegisterTests = DetectKrb5MsgTypeRegisterTests;
 #endif
 
-    DetectAppLayerInspectEngineRegister2("krb5_msg_type", ALPROTO_KRB5, SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister("krb5_msg_type", ALPROTO_KRB5, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectGenericList, NULL);
 
-    DetectAppLayerInspectEngineRegister2("krb5_msg_type", ALPROTO_KRB5, SIG_FLAG_TOCLIENT, 0,
+    DetectAppLayerInspectEngineRegister("krb5_msg_type", ALPROTO_KRB5, SIG_FLAG_TOCLIENT, 0,
             DetectEngineInspectGenericList, NULL);
 
     /* set up the PCRE for keyword parsing */
@@ -173,7 +173,6 @@ error:
 static int DetectKrb5MsgTypeSetup (DetectEngineCtx *de_ctx, Signature *s, const char *krb5str)
 {
     DetectKrb5MsgTypeData *krb5d = NULL;
-    SigMatch *sm = NULL;
 
     if (DetectSignatureSetAppProto(s, ALPROTO_KRB5) != 0)
         return -1;
@@ -182,22 +181,16 @@ static int DetectKrb5MsgTypeSetup (DetectEngineCtx *de_ctx, Signature *s, const 
     if (krb5d == NULL)
         goto error;
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_AL_KRB5_MSGTYPE, (SigMatchCtx *)krb5d,
+                g_krb5_msg_type_list_id) == NULL) {
         goto error;
-
-    sm->type = DETECT_AL_KRB5_MSGTYPE;
-    sm->ctx = (void *)krb5d;
-
-    SigMatchAppendSMToList(s, sm, g_krb5_msg_type_list_id);
+    }
 
     return 0;
 
 error:
     if (krb5d != NULL)
         DetectKrb5MsgTypeFree(de_ctx, krb5d);
-    if (sm != NULL)
-        SCFree(sm);
     return -1;
 }
 

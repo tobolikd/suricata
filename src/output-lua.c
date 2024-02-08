@@ -162,7 +162,7 @@ static int LuaStreamingLogger(ThreadVars *tv, void *thread_data, const Flow *f,
  *
  *  A single call to this function will run one script for a single
  *  packet. If it is called, it means that the registered condition
- *  function has returned TRUE.
+ *  function has returned true.
  *
  *  The script is called once for each alert stored in the packet.
  *
@@ -215,11 +215,9 @@ not_supported:
     SCReturnInt(0);
 }
 
-static int LuaPacketConditionAlerts(ThreadVars *tv, void *data, const Packet *p)
+static bool LuaPacketConditionAlerts(ThreadVars *tv, void *data, const Packet *p)
 {
-    if (p->alerts.cnt > 0)
-        return TRUE;
-    return FALSE;
+    return (p->alerts.cnt > 0);
 }
 
 /** \internal
@@ -227,7 +225,7 @@ static int LuaPacketConditionAlerts(ThreadVars *tv, void *data, const Packet *p)
  *
  *  A single call to this function will run one script for a single
  *  packet. If it is called, it means that the registered condition
- *  function has returned TRUE.
+ *  function has returned true.
  *
  *  The script is called once for each packet.
  *
@@ -265,9 +263,9 @@ not_supported:
     SCReturnInt(0);
 }
 
-static int LuaPacketCondition(ThreadVars *tv, void *data, const Packet *p)
+static bool LuaPacketCondition(ThreadVars *tv, void *data, const Packet *p)
 {
-    return TRUE;
+    return true;
 }
 
 /** \internal
@@ -608,10 +606,9 @@ static OutputInitResult OutputLuaLogInitSub(ConfNode *conf, OutputCtx *parent_ct
     if (conf == NULL)
         return result;
 
-    LogLuaCtx *lua_ctx = SCMalloc(sizeof(LogLuaCtx));
+    LogLuaCtx *lua_ctx = SCCalloc(1, sizeof(LogLuaCtx));
     if (unlikely(lua_ctx == NULL))
         return result;
-    memset(lua_ctx, 0x00, sizeof(*lua_ctx));
 
     OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
     if (unlikely(output_ctx == NULL)) {
@@ -844,10 +841,9 @@ static void OutputLuaLogDoDeinit(LogLuaCtx *lua_ctx)
  */
 static TmEcode LuaLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    LogLuaThreadCtx *td = SCMalloc(sizeof(*td));
+    LogLuaThreadCtx *td = SCCalloc(1, sizeof(*td));
     if (unlikely(td == NULL))
         return TM_ECODE_FAILED;
-    memset(td, 0, sizeof(*td));
 
     if (initdata == NULL) {
         SCLogDebug("Error getting context for LuaLog. \"initdata\" argument NULL");

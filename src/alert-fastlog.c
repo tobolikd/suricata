@@ -71,7 +71,7 @@ TmEcode AlertFastLogThreadDeinit(ThreadVars *, void *);
 void AlertFastLogRegisterTests(void);
 static void AlertFastLogDeInitCtx(OutputCtx *);
 
-int AlertFastLogCondition(ThreadVars *tv, void *thread_data, const Packet *p);
+static bool AlertFastLogCondition(ThreadVars *tv, void *thread_data, const Packet *p);
 int AlertFastLogger(ThreadVars *tv, void *data, const Packet *p);
 
 void AlertFastLogRegister(void)
@@ -87,9 +87,9 @@ typedef struct AlertFastLogThread_ {
     LogFileCtx* file_ctx;
 } AlertFastLogThread;
 
-int AlertFastLogCondition(ThreadVars *tv, void *thread_data, const Packet *p)
+static bool AlertFastLogCondition(ThreadVars *tv, void *thread_data, const Packet *p)
 {
-    return (p->alerts.cnt ? TRUE : FALSE);
+    return (p->alerts.cnt > 0);
 }
 
 static inline void AlertFastLogOutputAlert(AlertFastLogThread *aft, char *buffer,
@@ -188,10 +188,9 @@ int AlertFastLogger(ThreadVars *tv, void *data, const Packet *p)
 
 TmEcode AlertFastLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    AlertFastLogThread *aft = SCMalloc(sizeof(AlertFastLogThread));
+    AlertFastLogThread *aft = SCCalloc(1, sizeof(AlertFastLogThread));
     if (unlikely(aft == NULL))
         return TM_ECODE_FAILED;
-    memset(aft, 0, sizeof(AlertFastLogThread));
     if(initdata == NULL)
     {
         SCLogDebug("Error getting context for AlertFastLog.  \"initdata\" argument NULL");

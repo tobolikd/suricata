@@ -41,15 +41,11 @@ static int DetectDnsOpcodeSetup(DetectEngineCtx *de_ctx, Signature *s,
         return -1;
     }
 
-    SigMatch *sm = SigMatchAlloc();
-    if (unlikely(sm == NULL)) {
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_AL_DNS_OPCODE, (SigMatchCtx *)detect,
+                dns_opcode_list_id) == NULL) {
         goto error;
     }
 
-    sm->type = DETECT_AL_DNS_OPCODE;
-    sm->ctx = (void *)detect;
-    SigMatchAppendSMToList(s, sm, dns_opcode_list_id);
-    
     SCReturnInt(0);
 
 error:
@@ -83,10 +79,10 @@ void DetectDnsOpcodeRegister(void)
     sigmatch_table[DETECT_AL_DNS_OPCODE].AppLayerTxMatch =
         DetectDnsOpcodeMatch;
 
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "dns.opcode", ALPROTO_DNS, SIG_FLAG_TOSERVER, 0, DetectEngineInspectGenericList, NULL);
 
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "dns.opcode", ALPROTO_DNS, SIG_FLAG_TOCLIENT, 0, DetectEngineInspectGenericList, NULL);
 
     dns_opcode_list_id = DetectBufferTypeGetByName("dns.opcode");

@@ -85,9 +85,7 @@
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 
 void SCACTileInitCtx(MpmCtx *);
-void SCACTileInitThreadCtx(MpmCtx *, MpmThreadCtx *);
 void SCACTileDestroyCtx(MpmCtx *);
-void SCACTileDestroyThreadCtx(MpmCtx *, MpmThreadCtx *);
 int SCACTileAddPatternCI(MpmCtx *, uint8_t *, uint16_t, uint16_t, uint16_t,
                          uint32_t, SigIntId, uint8_t);
 int SCACTileAddPatternCS(MpmCtx *, uint8_t *, uint16_t, uint16_t, uint16_t,
@@ -97,8 +95,9 @@ uint32_t SCACTileSearch(const MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx,
                         PrefilterRuleStore *pmq, const uint8_t *buf,
                         uint32_t buflen);
 void SCACTilePrintInfo(MpmCtx *mpm_ctx);
-void SCACTilePrintSearchStats(MpmThreadCtx *mpm_thread_ctx);
-void SCACTileRegisterTests(void);
+#ifdef UNITTESTS
+static void SCACTileRegisterTests(void);
+#endif
 
 uint32_t SCACTileSearchLarge(const SCACTileSearchCtx *ctx, MpmThreadCtx *mpm_thread_ctx,
                              PrefilterRuleStore *pmq,
@@ -511,11 +510,10 @@ static void SCACTileCreateFailureTable(MpmCtx *mpm_ctx)
 
     /* Allocate space for the failure table.  A failure entry in the table for
      * every state(SCACTileCtx->state_count) */
-    ctx->failure_table = SCMalloc(ctx->state_count * sizeof(int32_t));
+    ctx->failure_table = SCCalloc(ctx->state_count, sizeof(int32_t));
     if (ctx->failure_table == NULL) {
         FatalError("Error allocating memory");
     }
-    memset(ctx->failure_table, 0, ctx->state_count * sizeof(int32_t));
 
     /* Add the failure transitions for the 0th state, and add every non-fail
      * transition from the 0th state to the queue for further processing
@@ -712,11 +710,10 @@ static void SCACTileClubOutputStatePresenceWithDeltaTable(MpmCtx *mpm_ctx)
 
     /* Allocate next-state table. */
     int size = ctx->state_count * ctx->bytes_per_state * ctx->alphabet_storage;
-    void *state_table = SCMalloc(size);
+    void *state_table = SCCalloc(1, size);
     if (unlikely(state_table == NULL)) {
         FatalError("Error allocating memory");
     }
-    memset(state_table, 0, size);
     ctx->state_table = state_table;
 
     mpm_ctx->memory_cnt++;
@@ -879,11 +876,9 @@ int SCACTilePreparePatterns(MpmCtx *mpm_ctx)
     }
 
     /* alloc the pattern array */
-    ctx->parray = (MpmPattern **)SCMalloc(mpm_ctx->pattern_cnt *
-                                               sizeof(MpmPattern *));
+    ctx->parray = (MpmPattern **)SCCalloc(mpm_ctx->pattern_cnt, sizeof(MpmPattern *));
     if (ctx->parray == NULL)
         goto error;
-    memset(ctx->parray, 0, mpm_ctx->pattern_cnt * sizeof(MpmPattern *));
 
     /* populate it with the patterns in the hash */
     uint32_t i = 0, p = 0;
@@ -962,25 +957,6 @@ error:
 }
 
 /**
- * \brief Init the mpm thread context.
- *
- * \param mpm_ctx        Pointer to the mpm context.
- * \param mpm_thread_ctx Pointer to the mpm thread context.
- */
-void SCACTileInitThreadCtx(MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx)
-{
-    memset(mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
-
-    mpm_thread_ctx->ctx = SCMalloc(sizeof(SCACTileThreadCtx));
-    if (mpm_thread_ctx->ctx == NULL) {
-        exit(EXIT_FAILURE);
-    }
-    memset(mpm_thread_ctx->ctx, 0, sizeof(SCACTileThreadCtx));
-    mpm_thread_ctx->memory_cnt++;
-    mpm_thread_ctx->memory_size += sizeof(SCACTileThreadCtx);
-}
-
-/**
  * \brief Initialize the AC context.
  *
  * \param mpm_ctx       Mpm context.
@@ -991,11 +967,10 @@ void SCACTileInitCtx(MpmCtx *mpm_ctx)
         return;
 
     /* Search Context */
-    mpm_ctx->ctx = SCMalloc(sizeof(SCACTileSearchCtx));
+    mpm_ctx->ctx = SCCalloc(1, sizeof(SCACTileSearchCtx));
     if (mpm_ctx->ctx == NULL) {
         exit(EXIT_FAILURE);
     }
-    memset(mpm_ctx->ctx, 0, sizeof(SCACTileSearchCtx));
 
     mpm_ctx->memory_cnt++;
     mpm_ctx->memory_size += sizeof(SCACTileSearchCtx);
@@ -1003,43 +978,23 @@ void SCACTileInitCtx(MpmCtx *mpm_ctx)
     SCACTileSearchCtx *search_ctx = (SCACTileSearchCtx *)mpm_ctx->ctx;
 
     /* MPM Creation context */
-    search_ctx->init_ctx = SCMalloc(sizeof(SCACTileCtx));
+    search_ctx->init_ctx = SCCalloc(1, sizeof(SCACTileCtx));
     if (search_ctx->init_ctx == NULL) {
         exit(EXIT_FAILURE);
     }
-    memset(search_ctx->init_ctx, 0, sizeof(SCACTileCtx));
 
     mpm_ctx->memory_cnt++;
     mpm_ctx->memory_size += sizeof(SCACTileCtx);
 
     /* initialize the hash we use to speed up pattern insertions */
-    mpm_ctx->init_hash = SCMalloc(sizeof(MpmPattern *) * MPM_INIT_HASH_SIZE);
+    mpm_ctx->init_hash = SCCalloc(MPM_INIT_HASH_SIZE, sizeof(MpmPattern *));
     if (mpm_ctx->init_hash == NULL) {
         exit(EXIT_FAILURE);
     }
-    memset(mpm_ctx->init_hash, 0, sizeof(MpmPattern *) * MPM_INIT_HASH_SIZE);
 
     /* get conf values for AC from our yaml file.  We have no conf values for
      * now.  We will certainly need this, as we develop the algo */
     SCACTileGetConfig();
-}
-
-/**
- * \brief Destroy the mpm thread context.
- *
- * \param mpm_ctx        Pointer to the mpm context.
- * \param mpm_thread_ctx Pointer to the mpm thread context.
- */
-void SCACTileDestroyThreadCtx(MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx)
-{
-    SCACTilePrintSearchStats(mpm_thread_ctx);
-
-    if (mpm_thread_ctx->ctx != NULL) {
-        SCFree(mpm_thread_ctx->ctx);
-        mpm_thread_ctx->ctx = NULL;
-        mpm_thread_ctx->memory_cnt--;
-        mpm_thread_ctx->memory_size -= sizeof(SCACTileThreadCtx);
-    }
 }
 
 static void SCACTileDestroyInitCtx(MpmCtx *mpm_ctx)
@@ -1173,13 +1128,6 @@ static int CheckMatch(const SCACTileSearchCtx *ctx, PrefilterRuleStore *pmq,
         MpmPatternIndex pindex = patterns[k] & 0x0FFFFFFF;
         if (mpm_bitarray[pindex / 8] & (1 << (pindex % 8))) {
             /* Pattern already seen by this MPM. */
-            /* NOTE: This is faster then rechecking if it is a case-sensitive match
-             * since we know this pattern has already been seen, but incrementing
-             * matches here could over report matches. For example if the case-sensitive
-             * pattern is "Foo" and the string is "Foo bar foo", matches would be reported
-             * as 2, when it should really be 1, since "foo" is not a true match.
-             */
-            matches++;
             continue;
         }
         const SCACTilePatternList *pat = &pattern_list[pindex];
@@ -1421,16 +1369,6 @@ int SCACTileAddPatternCS(MpmCtx *mpm_ctx, uint8_t *pat, uint16_t patlen,
                               pid, sid, flags);
 }
 
-void SCACTilePrintSearchStats(MpmThreadCtx *mpm_thread_ctx)
-{
-#ifdef SC_AC_TILE_COUNTERS
-    SCACTileThreadCtx *ctx = (SCACTileThreadCtx *)mpm_thread_ctx->ctx;
-    printf("AC Thread Search stats (ctx %p)\n", ctx);
-    printf("Total calls: %" PRIu32 "\n", ctx->total_calls);
-    printf("Total matches: %" PRIu64 "\n", ctx->total_matches);
-#endif /* SC_AC_TILE_COUNTERS */
-}
-
 void SCACTilePrintInfo(MpmCtx *mpm_ctx)
 {
     SCACTileSearchCtx *search_ctx = (SCACTileSearchCtx *)mpm_ctx->ctx;
@@ -1461,16 +1399,15 @@ void MpmACTileRegister(void)
 {
     mpm_table[MPM_AC_KS].name = "ac-ks";
     mpm_table[MPM_AC_KS].InitCtx = SCACTileInitCtx;
-    mpm_table[MPM_AC_KS].InitThreadCtx = SCACTileInitThreadCtx;
     mpm_table[MPM_AC_KS].DestroyCtx = SCACTileDestroyCtx;
-    mpm_table[MPM_AC_KS].DestroyThreadCtx = SCACTileDestroyThreadCtx;
     mpm_table[MPM_AC_KS].AddPattern = SCACTileAddPatternCS;
     mpm_table[MPM_AC_KS].AddPatternNocase = SCACTileAddPatternCI;
     mpm_table[MPM_AC_KS].Prepare = SCACTilePreparePatterns;
     mpm_table[MPM_AC_KS].Search = SCACTileSearch;
     mpm_table[MPM_AC_KS].PrintCtx = SCACTilePrintInfo;
-    mpm_table[MPM_AC_KS].PrintThreadCtx = SCACTilePrintSearchStats;
+#ifdef UNITTESTS
     mpm_table[MPM_AC_KS].RegisterUnittests = SCACTileRegisterTests;
+#endif
 }
 
 
@@ -1489,7 +1426,6 @@ static int SCACTileTest01(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abcd", 4, 0, 0, 0, 0, 0);
@@ -1508,7 +1444,6 @@ static int SCACTileTest01(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1523,7 +1458,6 @@ static int SCACTileTest02(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abce", 4, 0, 0, 0, 0, 0);
@@ -1541,7 +1475,6 @@ static int SCACTileTest02(void)
         printf("0 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1556,7 +1489,6 @@ static int SCACTileTest03(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abcd", 4, 0, 0, 0, 0, 0);
@@ -1578,7 +1510,6 @@ static int SCACTileTest03(void)
         printf("3 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1593,7 +1524,6 @@ static int SCACTileTest04(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abcd", 4, 0, 0, 0, 0, 0);
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"bcdegh", 6, 0, 0, 1, 0, 0);
@@ -1612,7 +1542,6 @@ static int SCACTileTest04(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1627,7 +1556,6 @@ static int SCACTileTest05(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     MpmAddPatternCI(&mpm_ctx, (uint8_t *)"ABCD", 4, 0, 0, 0, 0, 0);
     MpmAddPatternCI(&mpm_ctx, (uint8_t *)"bCdEfG", 6, 0, 0, 1, 0, 0);
@@ -1646,7 +1574,6 @@ static int SCACTileTest05(void)
         printf("3 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1661,7 +1588,6 @@ static int SCACTileTest06(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abcd", 4, 0, 0, 0, 0, 0);
     PmqSetup(&pmq);
@@ -1678,14 +1604,12 @@ static int SCACTileTest06(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
 
 static int SCACTileTest07(void)
 {
-    int result = 0;
     MpmCtx mpm_ctx;
     MpmThreadCtx mpm_thread_ctx;
     PrefilterRuleStore pmq;
@@ -1693,7 +1617,6 @@ static int SCACTileTest07(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* should match 30 times */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"A", 1, 0, 0, 0, 0, 0);
@@ -1709,23 +1632,18 @@ static int SCACTileTest07(void)
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                      30, 0, 0, 5, 0, 0);
     PmqSetup(&pmq);
-    /* total matches: 135 */
+    /* total matches: 135: 6 unique */
 
     SCACTilePreparePatterns(&mpm_ctx);
 
     const char *buf = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     uint32_t cnt = SCACTileSearch(&mpm_ctx, &mpm_thread_ctx, &pmq,
                                   (uint8_t *)buf, strlen(buf));
-
-    if (cnt == 135)
-        result = 1;
-    else
-        printf("135 != %" PRIu32 " ",cnt);
+    FAIL_IF_NOT(cnt == 6);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
-    return result;
+    PASS;
 }
 
 static int SCACTileTest08(void)
@@ -1738,7 +1656,6 @@ static int SCACTileTest08(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abcd", 4, 0, 0, 0, 0, 0);
@@ -1755,7 +1672,6 @@ static int SCACTileTest08(void)
         printf("0 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1770,7 +1686,6 @@ static int SCACTileTest09(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"ab", 2, 0, 0, 0, 0, 0);
@@ -1787,7 +1702,6 @@ static int SCACTileTest09(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1802,7 +1716,6 @@ static int SCACTileTest10(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abcdefgh", 8, 0, 0, 0, 0, 0);
@@ -1824,7 +1737,6 @@ static int SCACTileTest10(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1839,7 +1751,6 @@ static int SCACTileTest11(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     if (MpmAddPatternCS(&mpm_ctx, (uint8_t *)"he", 2, 0, 0, 1, 0, 0) == -1)
         goto end;
@@ -1870,10 +1781,9 @@ static int SCACTileTest11(void)
                               strlen(buf)) == 2);
 
  end:
-    SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
-    PmqFree(&pmq);
-    return result;
+     SCACTileDestroyCtx(&mpm_ctx);
+     PmqFree(&pmq);
+     return result;
 }
 
 static int SCACTileTest12(void)
@@ -1886,7 +1796,6 @@ static int SCACTileTest12(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"wxyz", 4, 0, 0, 0, 0, 0);
@@ -1906,7 +1815,6 @@ static int SCACTileTest12(void)
         printf("2 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1921,7 +1829,6 @@ static int SCACTileTest13(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     const char pat[] = "abcdefghijklmnopqrstuvwxyzABCD";
@@ -1940,7 +1847,6 @@ static int SCACTileTest13(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1955,7 +1861,6 @@ static int SCACTileTest14(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     const char pat[] = "abcdefghijklmnopqrstuvwxyzABCDE";
@@ -1974,7 +1879,6 @@ static int SCACTileTest14(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -1989,7 +1893,6 @@ static int SCACTileTest15(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     const char pat[] = "abcdefghijklmnopqrstuvwxyzABCDEF";
@@ -2008,7 +1911,6 @@ static int SCACTileTest15(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2023,7 +1925,6 @@ static int SCACTileTest16(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     const char pat[] = "abcdefghijklmnopqrstuvwxyzABC";
@@ -2042,7 +1943,6 @@ static int SCACTileTest16(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2057,7 +1957,6 @@ static int SCACTileTest17(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     const char pat[] = "abcdefghijklmnopqrstuvwxyzAB";
@@ -2076,7 +1975,6 @@ static int SCACTileTest17(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2091,7 +1989,6 @@ static int SCACTileTest18(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     const char pat[] = "abcde"
@@ -2115,7 +2012,6 @@ static int SCACTileTest18(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2130,7 +2026,6 @@ static int SCACTileTest19(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 */
     const char pat[] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -2149,7 +2044,6 @@ static int SCACTileTest19(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2164,7 +2058,6 @@ static int SCACTileTest20(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 */
     const char pat[] = "AAAAA"
@@ -2189,7 +2082,6 @@ static int SCACTileTest20(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2204,7 +2096,6 @@ static int SCACTileTest21(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"AA", 2, 0, 0, 0, 0, 0);
@@ -2221,7 +2112,6 @@ static int SCACTileTest21(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2236,7 +2126,6 @@ static int SCACTileTest22(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"abcd", 4, 0, 0, 0, 0, 0);
@@ -2256,7 +2145,6 @@ static int SCACTileTest22(void)
         printf("2 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2271,7 +2159,6 @@ static int SCACTileTest23(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"AA", 2, 0, 0, 0, 0, 0);
@@ -2288,7 +2175,6 @@ static int SCACTileTest23(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2303,7 +2189,6 @@ static int SCACTileTest24(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 1 */
     MpmAddPatternCI(&mpm_ctx, (uint8_t *)"AA", 2, 0, 0, 0, 0, 0);
@@ -2320,7 +2205,6 @@ static int SCACTileTest24(void)
         printf("1 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2335,7 +2219,6 @@ static int SCACTileTest25(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     MpmAddPatternCI(&mpm_ctx, (uint8_t *)"ABCD", 4, 0, 0, 0, 0, 0);
     MpmAddPatternCI(&mpm_ctx, (uint8_t *)"bCdEfG", 6, 0, 0, 1, 0, 0);
@@ -2354,7 +2237,6 @@ static int SCACTileTest25(void)
         printf("3 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2369,7 +2251,6 @@ static int SCACTileTest26(void)
     memset(&mpm_ctx, 0x00, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     MpmAddPatternCI(&mpm_ctx, (uint8_t *)"Works", 5, 0, 0, 0, 0, 0);
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"Works", 5, 0, 0, 1, 0, 0);
@@ -2387,7 +2268,6 @@ static int SCACTileTest26(void)
         printf("3 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2402,7 +2282,6 @@ static int SCACTileTest27(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 0 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"ONE", 3, 0, 0, 0, 0, 0);
@@ -2420,7 +2299,6 @@ static int SCACTileTest27(void)
         printf("0 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2435,7 +2313,6 @@ static int SCACTileTest28(void)
     memset(&mpm_ctx, 0, sizeof(MpmCtx));
     memset(&mpm_thread_ctx, 0, sizeof(MpmThreadCtx));
     MpmInitCtx(&mpm_ctx, MPM_AC_KS);
-    SCACTileInitThreadCtx(&mpm_ctx, &mpm_thread_ctx);
 
     /* 0 match */
     MpmAddPatternCS(&mpm_ctx, (uint8_t *)"one", 3, 0, 0, 0, 0, 0);
@@ -2453,7 +2330,6 @@ static int SCACTileTest28(void)
         printf("0 != %" PRIu32 " ",cnt);
 
     SCACTileDestroyCtx(&mpm_ctx);
-    SCACTileDestroyThreadCtx(&mpm_ctx, &mpm_thread_ctx);
     PmqFree(&pmq);
     return result;
 }
@@ -2512,12 +2388,8 @@ end:
     return result;
 }
 
-#endif /* UNITTESTS */
-
 void SCACTileRegisterTests(void)
 {
-
-#ifdef UNITTESTS
     UtRegisterTest("SCACTileTest01", SCACTileTest01);
     UtRegisterTest("SCACTileTest02", SCACTileTest02);
     UtRegisterTest("SCACTileTest03", SCACTileTest03);
@@ -2547,8 +2419,8 @@ void SCACTileRegisterTests(void)
     UtRegisterTest("SCACTileTest27", SCACTileTest27);
     UtRegisterTest("SCACTileTest28", SCACTileTest28);
     UtRegisterTest("SCACTileTest29", SCACTileTest29);
-#endif
 }
+#endif
 
 #else /* we're big endian */
 

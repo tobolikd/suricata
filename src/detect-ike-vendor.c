@@ -105,7 +105,7 @@ static void PrefilterTxIkeVendor(DetectEngineThreadCtx *det_ctx, const void *pec
 
         if (buffer->inspect_len >= mpm_ctx->minlen) {
             (void)mpm_table[mpm_ctx->mpm_type].Search(
-                    mpm_ctx, &det_ctx->mtcu, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
+                    mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
             PREFILTER_PROFILING_ADD_BYTES(det_ctx, buffer->inspect_len);
         }
         local_id++;
@@ -155,14 +155,10 @@ static uint8_t DetectEngineInspectIkeVendor(DetectEngineCtx *de_ctx, DetectEngin
         if (buffer == NULL || buffer->inspect == NULL)
             break;
 
-        det_ctx->buffer_offset = 0;
-        det_ctx->discontinue_matching = 0;
-        det_ctx->inspection_recursion_counter = 0;
-
-        const int match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f,
-                (uint8_t *)buffer->inspect, buffer->inspect_len, buffer->inspect_offset,
+        const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f,
+                buffer->inspect, buffer->inspect_len, buffer->inspect_offset,
                 DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-        if (match == 1) {
+        if (match) {
             return DETECT_ENGINE_INSPECT_SIG_MATCH;
         }
         local_id++;
@@ -182,10 +178,10 @@ void DetectIkeVendorRegister(void)
     sigmatch_table[DETECT_AL_IKE_VENDOR].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_AL_IKE_VENDOR].flags |= SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerMpmRegister2("ike.vendor", SIG_FLAG_TOSERVER, 1, PrefilterMpmIkeVendorRegister,
+    DetectAppLayerMpmRegister("ike.vendor", SIG_FLAG_TOSERVER, 1, PrefilterMpmIkeVendorRegister,
             NULL, ALPROTO_IKE, 1);
 
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "ike.vendor", ALPROTO_IKE, SIG_FLAG_TOSERVER, 1, DetectEngineInspectIkeVendor, NULL);
 
     g_ike_vendor_buffer_id = DetectBufferTypeGetByName("ike.vendor");

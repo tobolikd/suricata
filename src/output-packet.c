@@ -58,10 +58,9 @@ int OutputRegisterPacketLogger(LoggerId logger_id, const char *name,
     ThreadDeinitFunc ThreadDeinit,
     ThreadExitPrintStatsFunc ThreadExitPrintStats)
 {
-    OutputPacketLogger *op = SCMalloc(sizeof(*op));
+    OutputPacketLogger *op = SCCalloc(1, sizeof(*op));
     if (op == NULL)
         return -1;
-    memset(op, 0x00, sizeof(*op));
 
     op->LogFunc = LogFunc;
     op->ConditionFunc = ConditionFunc;
@@ -105,7 +104,7 @@ static TmEcode OutputPacketLog(ThreadVars *tv, Packet *p, void *thread_data)
     while (logger && store) {
         DEBUG_VALIDATE_BUG_ON(logger->LogFunc == NULL || logger->ConditionFunc == NULL);
 
-        if ((logger->ConditionFunc(tv, store->thread_data, (const Packet *)p)) == TRUE) {
+        if (logger->ConditionFunc(tv, store->thread_data, (const Packet *)p)) {
             PACKET_PROFILING_LOGGER_START(p, logger->logger_id);
             logger->LogFunc(tv, store->thread_data, (const Packet *)p);
             PACKET_PROFILING_LOGGER_END(p, logger->logger_id);
@@ -126,10 +125,9 @@ static TmEcode OutputPacketLog(ThreadVars *tv, Packet *p, void *thread_data)
  *  loggers */
 static TmEcode OutputPacketLogThreadInit(ThreadVars *tv, const void *initdata, void **data)
 {
-    OutputPacketLoggerThreadData *td = SCMalloc(sizeof(*td));
+    OutputPacketLoggerThreadData *td = SCCalloc(1, sizeof(*td));
     if (td == NULL)
         return TM_ECODE_FAILED;
-    memset(td, 0x00, sizeof(*td));
 
     *data = (void *)td;
 
@@ -140,9 +138,8 @@ static TmEcode OutputPacketLogThreadInit(ThreadVars *tv, const void *initdata, v
         if (logger->ThreadInit) {
             void *retptr = NULL;
             if (logger->ThreadInit(tv, (void *)logger->output_ctx, &retptr) == TM_ECODE_OK) {
-                OutputLoggerThreadStore *ts = SCMalloc(sizeof(*ts));
-/* todo */      BUG_ON(ts == NULL);
-                memset(ts, 0x00, sizeof(*ts));
+                OutputLoggerThreadStore *ts = SCCalloc(1, sizeof(*ts));
+                /* todo */ BUG_ON(ts == NULL);
 
                 /* store thread handle */
                 ts->thread_data = retptr;

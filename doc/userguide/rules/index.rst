@@ -33,6 +33,8 @@ Suricata Rules
    ike-keywords
    http2-keywords
    quic-keywords
+   nfs-keywords
+   smtp-keywords
    app-layer
    xbits
    thresholding
@@ -43,3 +45,4 @@ Suricata Rules
    lua-detection
    differences-from-snort
    multi-buffer-matching
+   tag

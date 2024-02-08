@@ -115,11 +115,9 @@ Host *HostAlloc(void)
     }
     (void) SC_ATOMIC_ADD(host_memuse, g_host_size);
 
-    Host *h = SCMalloc(g_host_size);
+    Host *h = SCCalloc(1, g_host_size);
     if (unlikely(h == NULL))
         goto error;
-
-    memset(h, 0x00, g_host_size);
 
     SCMutexInit(&h->m, NULL);
     SC_ATOMIC_INIT(h->use_cnt);
@@ -342,14 +340,11 @@ void HostShutdown(void)
  */
 void HostCleanup(void)
 {
-    Host *h;
-    uint32_t u;
-
     if (host_hash != NULL) {
-        for (u = 0; u < host_config.hash_size; u++) {
-            h = host_hash[u].head;
+        for (uint32_t u = 0; u < host_config.hash_size; u++) {
             HostHashRow *hb = &host_hash[u];
             HRLOCK_LOCK(hb);
+            Host *h = host_hash[u].head;
             while (h) {
                 if ((SC_ATOMIC_GET(h->use_cnt) > 0) && (h->iprep != NULL)) {
                     /* iprep is attached to host only clear local storage */

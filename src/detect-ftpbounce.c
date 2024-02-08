@@ -69,7 +69,7 @@ void DetectFtpbounceRegister(void)
 
     g_ftp_request_list_id = DetectBufferTypeRegister("ftp_request");
 
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "ftp_request", ALPROTO_FTP, SIG_FLAG_TOSERVER, 0, DetectEngineInspectGenericList, NULL);
 }
 
@@ -207,17 +207,8 @@ int DetectFtpbounceSetup(DetectEngineCtx *de_ctx, Signature *s, const char *ftpb
 {
     SCEnter();
 
-    SigMatch *sm = NULL;
-
     if (DetectSignatureSetAppProto(s, ALPROTO_FTP) != 0)
         return -1;
-
-    sm = SigMatchAlloc();
-    if (sm == NULL) {
-        return -1;
-    }
-
-    sm->type = DETECT_FTPBOUNCE;
 
     /* We don't need to allocate any data for ftpbounce here.
      *
@@ -228,8 +219,9 @@ int DetectFtpbounceSetup(DetectEngineCtx *de_ctx, Signature *s, const char *ftpb
      * without breaking the connection, so I guess we can make it a bit faster
      * with a flow flag set lookup in the Match function.
      */
-    sm->ctx = NULL;
 
-    SigMatchAppendSMToList(s, sm, g_ftp_request_list_id);
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_FTPBOUNCE, NULL, g_ftp_request_list_id) == NULL) {
+        return -1;
+    }
     SCReturnInt(0);
 }

@@ -37,10 +37,10 @@ optimizations, and/or ask for help, it is important to communicate.
 
 These are our main channels:
 
-- `Suricata's issue tracker <https://redmine.openinfosecfoundation.org/
+* `Suricata's issue tracker <https://redmine.openinfosecfoundation.org/
   projects/suricata/issues>`_
-- `Suricata's forum <https://forum.suricata.io/c/developers/8>`_
-- `Suricata's Discord server <https://discord.com/invite/t3rV2x7MrG>`_
+* `Suricata's forum <https://forum.suricata.io/c/developers/8>`_
+* `Suricata's Discord server <https://discord.com/invite/t3rV2x7MrG>`_
 
 
 .. _claim-ticket:
@@ -151,18 +151,20 @@ it, so everyone knows that work is still open and waiting to be done.
 What branch to work on
 ======================
 
-There are 2 or 3 active branches:
+There are usually 2 or 3 active branches:
 
-    * master-x.x.x (e.g. master-6.x.y)
+    * master-x.x.x (e.g. master-6.0.x)
+    * main-x.x.x (e.g. main-7.0.x)
     * master
 
-The former is the stable branch. The latter the development branch.
+The ones with version numbers are stable branches. **master** is the development branch.
 
-The stable branch should only be worked on for important bug fixes. Those are
-mainly expected from more experienced contributors.
+The stable branch should only be worked on for important bug fixes or other
+needed :doc:`backports<backports-guide>`. Those are mainly expected from more
+experienced contributors.
 
 Development of new features or large scale redesign is done in the development
-branch. New development and new contributors should work with ``master`` except
+branch. New development and new contributors should work with *master* except
 in very special cases - which should and would be discussed with us first.
 
 If in doubt, please reach out to us via :ref:`Redmine, Discord or
@@ -197,7 +199,7 @@ Documentation Style
 For documenting *code*, please follow Rust documentation and/or Doxygen
 guidelines, according to what your contribution is using (Rust or C).
 
-If you are writing or updating *documentation pages*, please:
+When writing or updating *documentation pages*, please:
 
 * wrap up lines at 79 (80 at most) characters;
 * when adding diagrams or images, we prefer alternatives that can be generated
@@ -206,6 +208,67 @@ If you are writing or updating *documentation pages*, please:
   /docs.suricata.io/en/latest/#suricata-user-guide>`_ and can also be
   built to pdf, so it is important that it looks good in such formats.
 
+Rule examples
+-------------
+
+.. role:: example-rule-action
+.. role:: example-rule-header
+.. role:: example-rule-options
+.. role:: example-rule-emphasis
+
+For rule documentation, we have a special container::
+
+    example-rule
+
+This will present the rule in a box with an easier to read font size, and also
+allows highlighting specific elements in the signature, as the names indicate
+- action, header, options, or emphasize custom portions:
+
+    - example-rule-action
+    - example-rule-header
+    - example-rule-options
+    - example-rule-emphasis
+
+When using these, indicate the portion to be highlighted by surrounding it with
+` . Before using them, one has to invoke the specific role, like so::
+
+    .. role:: example-rule-role
+
+It is only necessary to invoke the role once per document. One can see these
+being invoked in our introduction to the rule language (see `Rules intro
+<https://raw.githubusercontent.com/OISF/suricata/master/doc/userguide/rules/intro.rst>`_).
+
+A rule example like::
+
+    .. container:: example-rule
+
+    :example-rule-action:`alert` :example-rule-header:`http $HOME_NET any ->
+    $EXTERNAL_NET any` :example-rule-options:`(msg:"HTTP GET Request Containing
+    Rule in URI"; flow:established,to_server; http.method; content:"GET"; http.uri;
+    content:"rule"; fast_pattern; classtype:bad-unknown; sid:123; rev:1;)`
+
+Results in:
+
+.. container:: example-rule
+
+    :example-rule-action:`alert` :example-rule-header:`http $HOME_NET any ->
+    $EXTERNAL_NET any`  :example-rule-options:`(msg:"HTTP GET Request Containing
+    Rule in URI"; flow:established,to_server; http.method; content:"GET"; http.uri;
+    content:"rule"; fast_pattern; classtype:bad-unknown; sid:123; rev:1;)`
+
+Example - emphasis::
+
+    .. container:: example-rule
+
+    alert ssh any any -> any any (msg:"match SSH protocol version";
+    :example-rule-emphasis:`ssh.proto;` content:"2.0"; sid:1000010;)
+
+Renders as:
+
+.. container:: example-rule
+
+    alert ssh any any -> any any (msg:"match SSH protocol version";
+    :example-rule-emphasis:`ssh.proto;` content:"2.0"; sid:1000010;)
 
 Commit History matters
 ======================

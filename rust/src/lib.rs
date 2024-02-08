@@ -15,12 +15,20 @@
  * 02110-1301, USA.
  */
 
+//! Suricata is a network intrusion prevention and monitoring engine.
+//!
+//! Suricata is a hybrid C and Rust application. What is found here are
+//! the components written in Rust.
+
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 // Allow these patterns as its a style we like.
 #![allow(clippy::needless_return)]
 #![allow(clippy::let_and_return)]
 #![allow(clippy::uninlined_format_args)]
+
+// We find this is beyond what the linter should flag.
+#![allow(clippy::items_after_test_module)]
 
 // We find this makes sense at time.
 #![allow(clippy::module_inception)]
@@ -70,7 +78,6 @@ pub mod conf;
 pub mod jsonbuilder;
 #[macro_use]
 pub mod applayer;
-/// cbindgen:ignore
 pub mod frames;
 pub mod filecontainer;
 pub mod filetracker;
@@ -112,3 +119,4 @@ pub mod plugin;
 pub mod lzma;
 pub mod util;
 pub mod ffi;
+pub mod feature;

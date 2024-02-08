@@ -41,6 +41,7 @@
 #define DETECT_BYTEJUMP_OFFSET_BE BIT_U16(7) /**< "byte extract" enabled */
 #define DETECT_BYTEJUMP_END       BIT_U16(8) /**< "from_end" jump */
 #define DETECT_BYTEJUMP_NBYTES_VAR BIT_U16(9) /**< nbytes string*/
+#define DETECT_BYTEJUMP_OFFSET_VAR BIT_U16(10) /**< byte extract value enabled */
 
 typedef struct DetectBytejumpData_ {
     uint8_t nbytes;                   /**< Number of bytes to compare */
@@ -68,16 +69,10 @@ void DetectBytejumpRegister (void);
  * \param p pointer to the current packet
  * \param m pointer to the sigmatch that we will cast into DetectBytejumpData
  *
- * \retval -1 error
- * \retval  0 no match
- * \retval  1 match
- *
- * \todo The return seems backwards.  We should return a non-zero error code.
- *       One of the error codes is "no match".  As-is if someone accidentally
- *       does: if (DetectBytejumpMatch(...)) { match }, then they catch an
- *       error as a match.
+ * \retval  false no match
+ * \retval  true
  */
-int DetectBytejumpDoMatch(DetectEngineThreadCtx *, const Signature *, const SigMatchCtx *,
+bool DetectBytejumpDoMatch(DetectEngineThreadCtx *, const Signature *, const SigMatchCtx *,
         const uint8_t *, uint32_t, uint16_t, int32_t, int32_t);
 
 #endif /* __DETECT_BYTEJUMP_H__ */

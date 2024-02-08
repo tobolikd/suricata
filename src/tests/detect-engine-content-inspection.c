@@ -29,33 +29,34 @@
 #include "../detect.h"
 #include "detect-engine-build.h"
 
+extern thread_local uint32_t ut_inspection_recursion_counter;
+
 #define TEST_HEADER                                     \
     ThreadVars tv;                                      \
     memset(&tv, 0, sizeof(tv));                         \
     Flow f;                                             \
     memset(&f, 0, sizeof(f));
 
-#define TEST_RUN(buf, buflen, sig, match, steps)                                            \
-{                                                                                           \
-    DetectEngineCtx *de_ctx = DetectEngineCtxInit();                                        \
-    FAIL_IF_NULL(de_ctx);                                                                   \
-    DetectEngineThreadCtx *det_ctx = NULL;                                                  \
-    char rule[2048];                                                                        \
-    snprintf(rule, sizeof(rule), "alert tcp any any -> any any (%s sid:1; rev:1;)", (sig)); \
-    Signature *s = DetectEngineAppendSig(de_ctx, rule);                                     \
-    FAIL_IF_NULL(s);                                                                        \
-    SigGroupBuild(de_ctx);                                                                  \
-    DetectEngineThreadCtxInit(&tv, (void *)de_ctx, (void *)&det_ctx);                       \
-    FAIL_IF_NULL(det_ctx);                                                                  \
-    int r = DetectEngineContentInspection(de_ctx, det_ctx,                                  \
-                s, s->sm_arrays[DETECT_SM_LIST_PMATCH], NULL, &f,                           \
-                (uint8_t *)(buf), (buflen), 0, DETECT_CI_FLAGS_SINGLE,                      \
-                DETECT_ENGINE_CONTENT_INSPECTION_MODE_PAYLOAD);                             \
-    FAIL_IF_NOT(r == (match));                                                              \
-    FAIL_IF_NOT(det_ctx->inspection_recursion_counter == (steps));                          \
-    DetectEngineThreadCtxDeinit(&tv, det_ctx);                                              \
-    DetectEngineCtxFree(de_ctx);                                                            \
-}
+#define TEST_RUN(buf, buflen, sig, match, steps)                                                   \
+    {                                                                                              \
+        DetectEngineCtx *de_ctx = DetectEngineCtxInit();                                           \
+        FAIL_IF_NULL(de_ctx);                                                                      \
+        DetectEngineThreadCtx *det_ctx = NULL;                                                     \
+        char rule[2048];                                                                           \
+        snprintf(rule, sizeof(rule), "alert tcp any any -> any any (%s sid:1; rev:1;)", (sig));    \
+        Signature *s = DetectEngineAppendSig(de_ctx, rule);                                        \
+        FAIL_IF_NULL(s);                                                                           \
+        SigGroupBuild(de_ctx);                                                                     \
+        DetectEngineThreadCtxInit(&tv, (void *)de_ctx, (void *)&det_ctx);                          \
+        FAIL_IF_NULL(det_ctx);                                                                     \
+        int r = DetectEngineContentInspection(de_ctx, det_ctx, s,                                  \
+                s->sm_arrays[DETECT_SM_LIST_PMATCH], NULL, &f, (uint8_t *)(buf), (buflen), 0,      \
+                DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_PAYLOAD);            \
+        FAIL_IF_NOT(r == (match));                                                                 \
+        FAIL_IF_NOT(ut_inspection_recursion_counter == (steps));                                   \
+        DetectEngineThreadCtxDeinit(&tv, det_ctx);                                                 \
+        DetectEngineCtxFree(de_ctx);                                                               \
+    }
 #define TEST_FOOTER     \
     PASS
 
@@ -142,6 +143,10 @@ static int DetectEngineContentInspectionTest06(void) {
     // 6 steps: (1) a, (2) 1st b, (3) c not found, (4) 2nd b, (5) c found, isdataat
     TEST_RUN("ababc", 5, "content:\"a\"; content:\"b\"; distance:0; within:1; content:\"c\"; distance:0; within:1; isdataat:!1,relative;", true, 5);
     TEST_RUN("ababc", 5, "content:\"a\"; content:\"b\"; distance:0; within:1; content:\"c\"; distance:0; within:1; isdataat:1,relative;", false, 6);
+    TEST_RUN("abcabc", 6,
+            "content:\"a\"; content:\"b\"; distance:0; within:1; content:\"c\"; distance:0; "
+            "within:1; isdataat:10,relative;",
+            false, 4);
 
     TEST_RUN("ababcabc", 8, "content:\"a\"; content:\"b\"; distance:0; within:1; content:\"c\"; distance:0; within:1; isdataat:!1,relative;", true, 7);
     TEST_RUN("ababcabc", 8, "content:\"a\"; content:\"b\"; distance:0; within:1; content:\"c\"; distance:0; within:1; isdataat:1,relative;", true, 6);
@@ -197,6 +202,12 @@ static int DetectEngineContentInspectionTest08(void) {
     TEST_RUN("abcdefghy", 9,
             "content:\"a\"; content:!\"x\"; content:!\"c\"; distance:2; within:1; ", true, 3);
 
+    TEST_RUN("aaabbbccc", 9, "content:\"ccc\"; endswith; content:!\"bccc\"; endswith; ", false, 2);
+    TEST_RUN("aaabbbccc", 9, "content:\"ccc\"; endswith; content:!\"accc\"; endswith; ", true, 2);
+    TEST_RUN("aaabbbccc", 9, "content:\"ccc\"; endswith; content:!\"bccc\"; endswith; depth:4; ",
+            true, 2);
+    TEST_RUN("aaabbbccc", 9, "content:\"ccc\"; endswith; content:!\"bccc\"; endswith; depth:9; ",
+            false, 2);
     TEST_FOOTER;
 }
 
@@ -227,6 +238,11 @@ static int DetectEngineContentInspectionTest10(void) {
     TEST_RUN("x9x9abcdefghi", 13, "content:\"x\"; byte_extract:1,0,data_size,string,relative; isdataat:data_size,relative;", true, 3);
     TEST_RUN("x9x9abcdefgh", 12, "content:\"x\"; byte_extract:1,0,data_size,string,relative; isdataat:!data_size,relative;", true, 5);
     TEST_RUN("x9x9abcdefgh", 12, "content:\"x\"; depth:1; byte_extract:1,0,data_size,string,relative; isdataat:!data_size,relative;", false, 3);
+    /* first isdataat should fail, second succeed */
+    TEST_RUN("x9x5abcdef", 10,
+            "content:\"x\"; byte_extract:1,0,data_size,string,relative; "
+            "isdataat:data_size,relative;",
+            true, 5);
     /* check for super high extracted values */
     TEST_RUN("100000000abcdefghi", 18, "byte_extract:0,0,data_size,string; isdataat:data_size;", false, 2);
     TEST_RUN("100000000abcdefghi", 18, "byte_extract:0,0,data_size,string; isdataat:!data_size;", true, 2);
@@ -273,6 +289,31 @@ static int DetectEngineContentInspectionTest13(void) {
     TEST_FOOTER;
 }
 
+static int DetectEngineContentInspectionTest14(void)
+{
+    TEST_HEADER;
+    TEST_RUN("XYZ_klm_1234abcd_XYZ_klm_5678abcd", 33,
+            "content:\"XYZ\"; content:\"_klm_\"; distance:0; content:\"abcd\"; distance:4; "
+            "byte_test:4,=,1234,-8,relative,string;",
+            true, 4);
+    TEST_RUN("XYZ_klm_1234abcd_XYZ_klm_5678abcd", 33,
+            "content:\"XYZ\"; content:\"_klm_\"; distance:0; content:\"abcd\"; distance:4; "
+            "byte_test:4,=,5678,-8,relative,string;",
+            true, 5);
+    TEST_FOOTER;
+}
+
+/** \brief negative distance */
+static int DetectEngineContentInspectionTest17(void)
+{
+    TEST_HEADER;
+    TEST_RUN("aaabbbcccdddee", 14,
+            "content:\"aaa\"; content:\"ee\"; within:2; distance:9; content:\"bbb\"; within:3; "
+            "distance:-11; content:\"ccc\"; within:3; distance:0;",
+            true, 4);
+    TEST_FOOTER;
+}
+
 void DetectEngineContentInspectionRegisterTests(void)
 {
     UtRegisterTest("DetectEngineContentInspectionTest01",
@@ -301,6 +342,10 @@ void DetectEngineContentInspectionRegisterTests(void)
                    DetectEngineContentInspectionTest12);
     UtRegisterTest("DetectEngineContentInspectionTest13 mix startswith/endswith",
                    DetectEngineContentInspectionTest13);
+    UtRegisterTest("DetectEngineContentInspectionTest14 byte_test negative offset",
+            DetectEngineContentInspectionTest14);
+    UtRegisterTest("DetectEngineContentInspectionTest17 negative distance",
+            DetectEngineContentInspectionTest17);
 }
 
 #undef TEST_HEADER

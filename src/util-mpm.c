@@ -29,7 +29,6 @@
 
 /* include pattern matchers */
 #include "util-mpm-ac.h"
-#include "util-mpm-ac-bs.h"
 #include "util-mpm-ac-ks.h"
 #include "util-mpm-hs.h"
 #include "util-hashlist.h"
@@ -133,11 +132,10 @@ int32_t MpmFactoryIsMpmCtxAvailable(const DetectEngineCtx *de_ctx, const MpmCtx 
 MpmCtx *MpmFactoryGetMpmCtxForProfile(const DetectEngineCtx *de_ctx, int32_t id, int direction)
 {
     if (id == MPM_CTX_FACTORY_UNIQUE_CONTEXT) {
-        MpmCtx *mpm_ctx = SCMalloc(sizeof(MpmCtx));
+        MpmCtx *mpm_ctx = SCCalloc(1, sizeof(MpmCtx));
         if (unlikely(mpm_ctx == NULL)) {
             FatalError("Error allocating memory");
         }
-        memset(mpm_ctx, 0, sizeof(MpmCtx));
         return mpm_ctx;
     } else if (id < -1) {
         SCLogError("Invalid argument - %d\n", id);
@@ -197,7 +195,16 @@ void MpmFactoryDeRegisterAllMpmCtxProfiles(DetectEngineCtx *de_ctx)
 
 void MpmInitThreadCtx(MpmThreadCtx *mpm_thread_ctx, uint16_t matcher)
 {
-    mpm_table[matcher].InitThreadCtx(NULL, mpm_thread_ctx);
+    if (mpm_table[matcher].InitThreadCtx != NULL) {
+        mpm_table[matcher].InitThreadCtx(NULL, mpm_thread_ctx);
+    }
+}
+
+void MpmDestroyThreadCtx(MpmThreadCtx *mpm_thread_ctx, const uint16_t matcher)
+{
+    if (mpm_table[matcher].DestroyThreadCtx != NULL) {
+        mpm_table[matcher].DestroyThreadCtx(NULL, mpm_thread_ctx);
+    }
 }
 
 void MpmInitCtx(MpmCtx *mpm_ctx, uint8_t matcher)
@@ -221,7 +228,6 @@ void MpmTableSetup(void)
     mpm_default_matcher = DEFAULT_MPM;
 
     MpmACRegister();
-    MpmACBSRegister();
     MpmACTileRegister();
 #ifdef BUILD_HYPERSCAN
     #ifdef HAVE_HS_VALID_PLATFORM
@@ -330,11 +336,10 @@ static inline MpmPattern *MpmInitHashLookup(MpmCtx *ctx,
  */
 static inline MpmPattern *MpmAllocPattern(MpmCtx *mpm_ctx)
 {
-    MpmPattern *p = SCMalloc(sizeof(MpmPattern));
+    MpmPattern *p = SCCalloc(1, sizeof(MpmPattern));
     if (unlikely(p == NULL)) {
         exit(EXIT_FAILURE);
     }
-    memset(p, 0, sizeof(MpmPattern));
 
     mpm_ctx->memory_cnt++;
     mpm_ctx->memory_size += sizeof(MpmPattern);
@@ -351,30 +356,34 @@ static inline MpmPattern *MpmAllocPattern(MpmCtx *mpm_ctx)
  */
 void MpmFreePattern(MpmCtx *mpm_ctx, MpmPattern *p)
 {
-    if (p != NULL && p->cs != NULL && p->cs != p->ci) {
+    if (p == NULL)
+        return;
+
+    if (p->cs != NULL && p->cs != p->ci) {
         SCFree(p->cs);
         mpm_ctx->memory_cnt--;
         mpm_ctx->memory_size -= p->len;
     }
 
-    if (p != NULL && p->ci != NULL) {
+    if (p->ci != NULL) {
         SCFree(p->ci);
         mpm_ctx->memory_cnt--;
         mpm_ctx->memory_size -= p->len;
     }
 
-    if (p != NULL && p->original_pat != NULL) {
+    if (p->original_pat != NULL) {
         SCFree(p->original_pat);
         mpm_ctx->memory_cnt--;
         mpm_ctx->memory_size -= p->len;
     }
 
-    if (p != NULL) {
-        SCFree(p);
-        mpm_ctx->memory_cnt--;
-        mpm_ctx->memory_size -= sizeof(MpmPattern);
+    if (p->sids != NULL) {
+        SCFree(p->sids);
     }
-    return;
+
+    SCFree(p);
+    mpm_ctx->memory_cnt--;
+    mpm_ctx->memory_size -= sizeof(MpmPattern);
 }
 
 static inline uint32_t MpmInitHash(MpmPattern *p)

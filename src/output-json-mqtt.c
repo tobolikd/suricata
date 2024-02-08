@@ -41,7 +41,6 @@
 #include "app-layer.h"
 #include "app-layer-parser.h"
 
-#include "app-layer-mqtt.h"
 #include "output-json-mqtt.h"
 #include "rust.h"
 
@@ -59,17 +58,9 @@ typedef struct LogMQTTLogThread_ {
     OutputJsonThreadCtx *ctx;
 } LogMQTTLogThread;
 
-bool JsonMQTTAddMetadata(const Flow *f, uint64_t tx_id, JsonBuilder *js)
+bool JsonMQTTAddMetadata(void *vtx, JsonBuilder *js)
 {
-    MQTTState *state = FlowGetAppState(f);
-    if (state) {
-        MQTTTransaction *tx = AppLayerParserGetTx(f->proto, ALPROTO_MQTT, state, tx_id);
-        if (tx) {
-            return rs_mqtt_logger_log(tx, MQTT_DEFAULTS, js);
-        }
-    }
-
-    return false;
+    return rs_mqtt_logger_log(vtx, MQTT_DEFAULTS, js);
 }
 
 static int JsonMQTTLogger(ThreadVars *tv, void *thread_data,

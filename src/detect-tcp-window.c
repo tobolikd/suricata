@@ -181,28 +181,24 @@ error:
 static int DetectWindowSetup (DetectEngineCtx *de_ctx, Signature *s, const char *windowstr)
 {
     DetectWindowData *wd = NULL;
-    SigMatch *sm = NULL;
 
     wd = DetectWindowParse(de_ctx, windowstr);
     if (wd == NULL) goto error;
 
     /* Okay so far so good, lets get this into a SigMatch
      * and put it in the Signature. */
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_WINDOW, (SigMatchCtx *)wd, DETECT_SM_LIST_MATCH) ==
+            NULL) {
         goto error;
-
-    sm->type = DETECT_WINDOW;
-    sm->ctx = (SigMatchCtx *)wd;
-
-    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
+    }
     s->flags |= SIG_FLAG_REQUIRE_PACKET;
 
     return 0;
 
 error:
-    if (wd != NULL) DetectWindowFree(de_ctx, wd);
-    if (sm != NULL) SCFree(sm);
+    if (wd != NULL)
+        DetectWindowFree(de_ctx, wd);
     return -1;
 
 }
@@ -226,15 +222,13 @@ void DetectWindowFree(DetectEngineCtx *de_ctx, void *ptr)
  */
 static int DetectWindowTestParse01 (void)
 {
-    int result = 0;
     DetectWindowData *wd = NULL;
     wd = DetectWindowParse(NULL, "35402");
-    if (wd != NULL &&wd->size==35402) {
-        DetectWindowFree(NULL, wd);
-        result = 1;
-    }
+    FAIL_IF_NULL(wd);
+    FAIL_IF_NOT(wd->size == 35402);
 
-    return result;
+    DetectWindowFree(NULL, wd);
+    PASS;
 }
 
 /**
@@ -242,19 +236,14 @@ static int DetectWindowTestParse01 (void)
  */
 static int DetectWindowTestParse02 (void)
 {
-    int result = 0;
     DetectWindowData *wd = NULL;
     wd = DetectWindowParse(NULL, "!35402");
-    if (wd != NULL) {
-        if (wd->negated == 1 && wd->size==35402) {
-            result = 1;
-        } else {
-            printf("expected wd->negated=1 and wd->size=35402\n");
-        }
-        DetectWindowFree(NULL, wd);
-    }
+    FAIL_IF_NULL(wd);
+    FAIL_IF_NOT(wd->negated == 1);
+    FAIL_IF_NOT(wd->size == 35402);
 
-    return result;
+    DetectWindowFree(NULL, wd);
+    PASS;
 }
 
 /**
@@ -262,17 +251,12 @@ static int DetectWindowTestParse02 (void)
  */
 static int DetectWindowTestParse03 (void)
 {
-    int result = 0;
     DetectWindowData *wd = NULL;
     wd = DetectWindowParse(NULL, "");
-    if (wd == NULL) {
-        result = 1;
-    } else {
-        printf("expected a NULL pointer (It was an empty string)\n");
-    }
-    DetectWindowFree(NULL, wd);
+    FAIL_IF_NOT_NULL(wd);
 
-    return result;
+    DetectWindowFree(NULL, wd);
+    PASS;
 }
 
 /**
@@ -280,16 +264,12 @@ static int DetectWindowTestParse03 (void)
  */
 static int DetectWindowTestParse04 (void)
 {
-    int result = 0;
     DetectWindowData *wd = NULL;
     wd = DetectWindowParse(NULL, "1235402");
-    if (wd != NULL) {
-        printf("expected a NULL pointer (It was exceeding the MAX window size)\n");
-        DetectWindowFree(NULL, wd);
-    }else
-        result=1;
+    FAIL_IF_NOT_NULL(wd);
 
-    return result;
+    DetectWindowFree(NULL, wd);
+    PASS;
 }
 
 /**
@@ -297,7 +277,6 @@ static int DetectWindowTestParse04 (void)
  */
 static int DetectWindowTestPacket01 (void)
 {
-    int result = 0;
     uint8_t *buf = (uint8_t *)"Hi all!";
     uint16_t buflen = strlen((char *)buf);
     Packet *p[3];
@@ -305,8 +284,7 @@ static int DetectWindowTestPacket01 (void)
     p[1] = UTHBuildPacket((uint8_t *)buf, buflen, IPPROTO_TCP);
     p[2] = UTHBuildPacket((uint8_t *)buf, buflen, IPPROTO_ICMP);
 
-    if (p[0] == NULL || p[1] == NULL ||p[2] == NULL)
-        goto end;
+    FAIL_IF(p[0] == NULL || p[1] == NULL || p[2] == NULL);
 
     /* TCP wwindow = 40 */
     p[0]->tcph->th_win = htons(40);
@@ -327,11 +305,10 @@ static int DetectWindowTestPacket01 (void)
                               {0, 1},
                               /* packet 2 should not match */
                               {0, 0} };
-    result = UTHGenericTest(p, 3, sigs, sid, (uint32_t *) results, 2);
+    FAIL_IF(UTHGenericTest(p, 3, sigs, sid, (uint32_t *)results, 2) == 0);
 
     UTHFreePackets(p, 3);
-end:
-    return result;
+    PASS;
 }
 
 /**

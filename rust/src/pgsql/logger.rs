@@ -78,8 +78,6 @@ fn log_request(req: &PgsqlFEMessage, flags: u32) -> Result<JsonBuilder, JsonErro
         }) => {
             if flags & PGSQL_LOG_PASSWORDS != 0 {
                 js.set_string_from_bytes("password", payload)?;
-            } else {
-                js.set_string(req.to_str(), "password log disabled")?;
             }
         }
         PgsqlFEMessage::SASLResponse(RegularPacket {
@@ -96,11 +94,26 @@ fn log_request(req: &PgsqlFEMessage, flags: u32) -> Result<JsonBuilder, JsonErro
         }) => {
             js.set_string_from_bytes(req.to_str(), payload)?;
         }
+        PgsqlFEMessage::CancelRequest(CancelRequestMessage {
+            pid,
+            backend_key,
+        }) => {
+            js.set_string("message", "cancel_request")?;
+            js.set_uint("process_id", (*pid).into())?;
+            js.set_uint("secret_key", (*backend_key).into())?;
+        }
         PgsqlFEMessage::Terminate(TerminationMessage {
             identifier: _,
             length: _,
         }) => {
             js.set_string("message", req.to_str())?;
+        }
+        PgsqlFEMessage::UnknownMessageType(RegularPacket {
+            identifier: _,
+            length: _,
+            payload: _,
+        }) => {
+            // We don't want to log these, for now. Cf redmine: #6576
         }
     }
     js.close()?;
@@ -177,12 +190,10 @@ fn log_response(res: &PgsqlBEMessage, jb: &mut JsonBuilder) -> Result<(), JsonEr
         }
         PgsqlBEMessage::UnknownMessageType(RegularPacket {
             identifier: _,
-            length,
-            payload,
+            length: _,
+            payload: _,
         }) => {
-            // jb.set_string_from_bytes("identifier", identifier.to_vec())?;
-            jb.set_uint("length", (*length).into())?;
-            jb.set_string_from_bytes("payload", payload)?;
+            // We don't want to log these, for now. Cf redmine: #6576
         }
         PgsqlBEMessage::AuthenticationOk(_)
         | PgsqlBEMessage::AuthenticationCleartextPassword(_)
@@ -223,11 +234,10 @@ fn log_response(res: &PgsqlBEMessage, jb: &mut JsonBuilder) -> Result<(), JsonEr
         }
         PgsqlBEMessage::ConsolidatedDataRow(ConsolidatedDataRowPacket {
             identifier: _,
-            length: _,
             row_cnt,
             data_size,
         }) => {
-            jb.set_uint("data_rows", (*row_cnt).into())?;
+            jb.set_uint("data_rows", *row_cnt)?;
             jb.set_uint("data_size", *data_size)?;
         }
         PgsqlBEMessage::NotificationResponse(NotificationResponse {

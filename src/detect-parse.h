@@ -33,7 +33,7 @@ typedef struct DetectFileHandlerTableElmt_ {
     const char *name;
     int priority;
     PrefilterRegisterFunc PrefilterFn;
-    InspectEngineFuncPtr2 Callback;
+    InspectEngineFuncPtr Callback;
     InspectionBufferGetDataPtr GetData;
     int al_protocols[MAX_DETECT_ALPROTO_CNT];
     int tx_progress;
@@ -62,7 +62,6 @@ enum {
 typedef struct DetectParseRegex {
     pcre2_code *regex;
     pcre2_match_context *context;
-    pcre2_match_data *match;
     struct DetectParseRegex *next;
 } DetectParseRegex;
 
@@ -75,7 +74,7 @@ SigMatchData* SigMatchList2DataArray(SigMatch *head);
 void SigParseRegisterTests(void);
 Signature *DetectEngineAppendSig(DetectEngineCtx *, const char *);
 
-void SigMatchAppendSMToList(Signature *, SigMatch *, int);
+SigMatch *SigMatchAppendSMToList(DetectEngineCtx *, Signature *, uint16_t, SigMatchCtx *, int);
 void SigMatchRemoveSMFromList(Signature *, SigMatch *, int);
 int SigMatchListSMBelongsTo(const Signature *, const SigMatch *);
 

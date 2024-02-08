@@ -30,9 +30,6 @@
 #define DBG_PERF
 #endif
 
-#define TRUE   1
-#define FALSE  0
-
 #define _GNU_SOURCE
 #define __USE_GNU
 
@@ -215,6 +212,10 @@ typedef unsigned char u_char;
 #include <netdb.h>
 #endif
 
+#if HAVE_MALLOC_H
+#include <malloc.h>
+#endif
+
 #if __CYGWIN__
 #if !defined _X86_ && !defined __x86_64
 #define _X86_
@@ -278,6 +279,10 @@ typedef unsigned char u_char;
 
 #ifdef HAVE_MAGIC
 #include <magic.h>
+#endif
+
+#ifdef HAVE_MATH_H
+#include <math.h>
 #endif
 
 /* we need this to stringify the defines which are supplied at compiletime see:

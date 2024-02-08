@@ -634,13 +634,24 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
     // Indicate that the thread is actually running its application level code (i.e., it can poll
     // packets)
     TmThreadsSetFlag(tv, THV_RUNNING);
-
     PacketPoolWait();
 
+    if (ptv->op_mode == DPDK_ETHDEV_MODE) {
+        rte_eth_stats_reset(ptv->port_id);
+        rte_eth_xstats_reset(ptv->port_id);
+    }
     while (1) {
         if (unlikely(suricata_ctl_flags != 0)) {
             // do not stop until you clean the ring in the secondary mode
             if (!(ptv->op_mode == DPDK_RING_MODE) || rte_ring_empty(ptv->rings.rx_ring)) {
+                if (!(ptv->op_mode == DPDK_RING_MODE)) {
+                    if (ptv->queue_id == 0) {
+                        rte_eth_dev_stop(ptv->port_id);
+                        if (ptv->copy_mode == DPDK_COPY_MODE_TAP || ptv->copy_mode == DPDK_COPY_MODE_IPS) {
+                            rte_eth_dev_stop(ptv->out_port_id);
+                        }
+                    }
+                }
                 SCLogDebug("Stopping Suricata!");
                 DPDKDumpCounters(ptv);
                 break;
@@ -778,12 +789,6 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
                         break;
                 }
             }
-
-#ifdef BUILD_HYPERSCAN
-            p->dpdk_v.detect_flags = metadata->detect_flags;
-#endif // BUILD_HYPERSCAN
-
-
 #endif /* BUILD_DPDK_APPS */
             PacketSetData(p, rte_pktmbuf_mtod(p->dpdk_v.mbuf, uint8_t *),
                     rte_pktmbuf_pkt_len(p->dpdk_v.mbuf));

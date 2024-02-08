@@ -78,13 +78,11 @@ void DetectMQTTConnectPasswordRegister(void)
     sigmatch_table[DETECT_AL_MQTT_CONNECT_PASSWORD].Setup = DetectMQTTConnectPasswordSetup;
     sigmatch_table[DETECT_AL_MQTT_CONNECT_PASSWORD].flags |= SIGMATCH_NOOPT;
 
-    DetectAppLayerInspectEngineRegister2(BUFFER_NAME, ALPROTO_MQTT,
-            SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister(BUFFER_NAME, ALPROTO_MQTT, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOSERVER, 2,
-            PrefilterGenericMpmRegister, GetData, ALPROTO_MQTT,
-	        1);
+    DetectAppLayerMpmRegister(BUFFER_NAME, SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister,
+            GetData, ALPROTO_MQTT, 1);
 
     DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);
 

@@ -64,9 +64,8 @@ static int StreamMpmFunc(
         smd->det_ctx->stream_mpm_cnt++;
         smd->det_ctx->stream_mpm_size += data_len;
 #endif
-        (void)mpm_table[smd->mpm_ctx->mpm_type].Search(smd->mpm_ctx,
-                &smd->det_ctx->mtcs, &smd->det_ctx->pmq,
-                data, data_len);
+        (void)mpm_table[smd->mpm_ctx->mpm_type].Search(
+                smd->mpm_ctx, &smd->det_ctx->mtc, &smd->det_ctx->pmq, data, data_len);
         PREFILTER_PROFILING_ADD_BYTES(smd->det_ctx, data_len);
     }
     return 0;
@@ -154,7 +153,6 @@ uint8_t DetectEngineInspectPacketPayload(DetectEngineCtx *de_ctx, DetectEngineTh
         const Signature *s, Flow *f, Packet *p)
 {
     SCEnter();
-    int r = 0;
 
     if (s->sm_arrays[DETECT_SM_LIST_PMATCH] == NULL) {
         SCReturnInt(0);
@@ -163,16 +161,10 @@ uint8_t DetectEngineInspectPacketPayload(DetectEngineCtx *de_ctx, DetectEngineTh
     det_ctx->payload_persig_cnt++;
     det_ctx->payload_persig_size += p->payload_len;
 #endif
-    det_ctx->buffer_offset = 0;
-    det_ctx->discontinue_matching = 0;
-    det_ctx->inspection_recursion_counter = 0;
-    det_ctx->replist = NULL;
-
-    r = DetectEngineContentInspection(de_ctx, det_ctx,
-            s, s->sm_arrays[DETECT_SM_LIST_PMATCH],
-            p, f, p->payload, p->payload_len, 0,
+    const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s,
+            s->sm_arrays[DETECT_SM_LIST_PMATCH], p, f, p->payload, p->payload_len, 0,
             DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_PAYLOAD);
-    if (r == 1) {
+    if (match) {
         SCReturnInt(1);
     }
     SCReturnInt(0);
@@ -196,7 +188,6 @@ static uint8_t DetectEngineInspectStreamUDPPayload(DetectEngineCtx *de_ctx,
         Packet *p)
 {
     SCEnter();
-    int r = 0;
 
     if (smd == NULL) {
         SCReturnInt(0);
@@ -205,15 +196,10 @@ static uint8_t DetectEngineInspectStreamUDPPayload(DetectEngineCtx *de_ctx,
     det_ctx->payload_persig_cnt++;
     det_ctx->payload_persig_size += p->payload_len;
 #endif
-    det_ctx->buffer_offset = 0;
-    det_ctx->discontinue_matching = 0;
-    det_ctx->inspection_recursion_counter = 0;
-    det_ctx->replist = NULL;
-
-    r = DetectEngineContentInspection(de_ctx, det_ctx, s, smd,
-            p, f, p->payload, p->payload_len, 0, DETECT_CI_FLAGS_SINGLE,
-            DETECT_ENGINE_CONTENT_INSPECTION_MODE_PAYLOAD);
-    if (r == 1) {
+    const bool match =
+            DetectEngineContentInspection(de_ctx, det_ctx, s, smd, p, f, p->payload, p->payload_len,
+                    0, DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_PAYLOAD);
+    if (match) {
         SCReturnInt(1);
     }
     SCReturnInt(0);
@@ -230,21 +216,17 @@ static int StreamContentInspectFunc(
         void *cb_data, const uint8_t *data, const uint32_t data_len, const uint64_t _offset)
 {
     SCEnter();
-    int r = 0;
     struct StreamContentInspectData *smd = cb_data;
 #ifdef DEBUG
     smd->det_ctx->stream_persig_cnt++;
     smd->det_ctx->stream_persig_size += data_len;
 #endif
-    smd->det_ctx->buffer_offset = 0;
-    smd->det_ctx->discontinue_matching = 0;
-    smd->det_ctx->inspection_recursion_counter = 0;
 
-    r = DetectEngineContentInspection(smd->de_ctx, smd->det_ctx,
-            smd->s, smd->s->sm_arrays[DETECT_SM_LIST_PMATCH],
-            NULL, smd->f, (uint8_t *)data, data_len, 0, 0, //TODO
+    const bool match = DetectEngineContentInspection(smd->de_ctx, smd->det_ctx, smd->s,
+            smd->s->sm_arrays[DETECT_SM_LIST_PMATCH], NULL, smd->f, data, data_len, 0,
+            0, // TODO
             DETECT_ENGINE_CONTENT_INSPECTION_MODE_STREAM);
-    if (r == 1) {
+    if (match) {
         SCReturnInt(1);
     }
 
@@ -289,21 +271,16 @@ static int StreamContentInspectEngineFunc(
         void *cb_data, const uint8_t *data, const uint32_t data_len, const uint64_t _offset)
 {
     SCEnter();
-    int r = 0;
     struct StreamContentInspectEngineData *smd = cb_data;
 #ifdef DEBUG
     smd->det_ctx->stream_persig_cnt++;
     smd->det_ctx->stream_persig_size += data_len;
 #endif
-    smd->det_ctx->buffer_offset = 0;
-    smd->det_ctx->discontinue_matching = 0;
-    smd->det_ctx->inspection_recursion_counter = 0;
 
-    r = DetectEngineContentInspection(smd->de_ctx, smd->det_ctx,
-            smd->s, smd->smd,
-            NULL, smd->f, (uint8_t *)data, data_len, 0, 0, // TODO
+    const bool match = DetectEngineContentInspection(smd->de_ctx, smd->det_ctx, smd->s, smd->smd,
+            NULL, smd->f, data, data_len, 0, 0, // TODO
             DETECT_ENGINE_CONTENT_INSPECTION_MODE_STREAM);
-    if (r == 1) {
+    if (match) {
         SCReturnInt(1);
     }
 

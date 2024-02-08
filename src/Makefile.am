@@ -36,7 +36,6 @@ noinst_HEADERS = \
 	app-layer-krb5.h \
 	app-layer-modbus.h \
 	app-layer-quic.h \
-	app-layer-mqtt.h \
 	app-layer-nfs-tcp.h \
 	app-layer-nfs-udp.h \
 	app-layer-ntp.h \
@@ -121,8 +120,10 @@ noinst_HEADERS = \
 	detect-detection-filter.h \
 	detect-distance.h \
 	detect-dnp3.h \
+	detect-dns-answer-name.h \
 	detect-dns-opcode.h \
 	detect-dns-query.h \
+	detect-dns-query-name.h \
 	detect-dsize.h \
 	detect-engine-address.h \
 	detect-engine-address-ipv4.h \
@@ -166,6 +167,7 @@ noinst_HEADERS = \
 	detect-flowbits.h \
 	detect-flow.h \
 	detect-flow-age.h \
+	detect-flow-pkts.h \
 	detect-flowint.h \
 	detect-flowvar.h \
 	detect-fragbits.h \
@@ -249,6 +251,7 @@ noinst_HEADERS = \
 	detect-mqtt-connect-clientid.h \
 	detect-mqtt-connect-flags.h \
 	detect-mqtt-connect-password.h \
+	detect-mqtt-connect-protocol-string.h \
 	detect-mqtt-connect-username.h \
 	detect-mqtt-connect-willmessage.h \
 	detect-mqtt-connect-willtopic.h \
@@ -276,6 +279,7 @@ noinst_HEADERS = \
 	detect-rawbytes.h \
 	detect-reference.h \
 	detect-replace.h \
+	detect-requires.h \
 	detect-rev.h \
 	detect-rfb-name.h \
 	detect-rfb-secresult.h \
@@ -337,12 +341,15 @@ noinst_HEADERS = \
 	detect-tls-version.h \
 	detect-tls-random.h \
 	detect-tos.h \
+	detect-transform-casechange.h \
 	detect-transform-compress-whitespace.h \
 	detect-transform-dotprefix.h \
+	detect-transform-header-lowercase.h \
 	detect-transform-md5.h \
 	detect-transform-pcrexform.h \
 	detect-transform-sha1.h \
 	detect-transform-sha256.h \
+	detect-transform-strip-pseudo-headers.h \
 	detect-transform-strip-whitespace.h \
 	detect-transform-urldecode.h \
 	detect-transform-xor.h \
@@ -385,6 +392,7 @@ noinst_HEADERS = \
 	log-tlslog.h \
 	log-tlsstore.h \
 	output-eve-stream.h \
+	output-eve-null.h \
 	output-filedata.h \
 	output-file.h \
 	output-filestore.h \
@@ -574,7 +582,6 @@ noinst_HEADERS = \
 	util-mem.h \
 	util-memrchr.h \
 	util-misc.h \
-	util-mpm-ac-bs.h \
 	util-mpm-ac.h \
 	util-mpm-ac-ks.h \
 	util-mpm.h \
@@ -649,7 +656,6 @@ libsuricata_c_a_SOURCES = \
 	app-layer-krb5.c \
 	app-layer-modbus.c \
 	app-layer-quic.c \
-	app-layer-mqtt.c \
 	app-layer-nfs-tcp.c \
 	app-layer-nfs-udp.c \
 	app-layer-ntp.c \
@@ -733,8 +739,10 @@ libsuricata_c_a_SOURCES = \
 	detect-detection-filter.c \
 	detect-distance.c \
 	detect-dnp3.c \
+	detect-dns-answer-name.c \
 	detect-dns-opcode.c \
 	detect-dns-query.c \
+	detect-dns-query-name.c \
 	detect-dsize.c \
 	detect-engine-address.c \
 	detect-engine-address-ipv4.c \
@@ -778,6 +786,7 @@ libsuricata_c_a_SOURCES = \
 	detect-flowbits.c \
 	detect-flow.c \
 	detect-flow-age.c \
+	detect-flow-pkts.c \
 	detect-flowint.c \
 	detect-flowvar.c \
 	detect-fragbits.c \
@@ -859,6 +868,7 @@ libsuricata_c_a_SOURCES = \
 	detect-mqtt-connect-clientid.c \
 	detect-mqtt-connect-flags.c \
 	detect-mqtt-connect-password.c \
+	detect-mqtt-connect-protocol-string.c \
 	detect-mqtt-connect-username.c \
 	detect-mqtt-connect-willmessage.c \
 	detect-mqtt-connect-willtopic.c \
@@ -886,6 +896,7 @@ libsuricata_c_a_SOURCES = \
 	detect-rawbytes.c \
 	detect-reference.c \
 	detect-replace.c \
+	detect-requires.c \
 	detect-rev.c \
 	detect-rfb-name.c \
 	detect-rfb-secresult.c \
@@ -947,12 +958,15 @@ libsuricata_c_a_SOURCES = \
 	detect-tls-version.c \
 	detect-tls-random.c \
 	detect-tos.c \
+	detect-transform-casechange.c \
 	detect-transform-compress-whitespace.c \
 	detect-transform-dotprefix.c \
+	detect-transform-header-lowercase.c \
 	detect-transform-md5.c \
 	detect-transform-pcrexform.c \
 	detect-transform-sha1.c \
 	detect-transform-sha256.c \
+	detect-transform-strip-pseudo-headers.c \
 	detect-transform-strip-whitespace.c \
 	detect-transform-urldecode.c \
 	detect-transform-xor.c \
@@ -1038,6 +1052,7 @@ libsuricata_c_a_SOURCES = \
 	output-json-tftp.c \
 	output-json-tls.c \
 	output-eve-syslog.c \
+	output-eve-null.c \
 	output-lua.c \
 	output-packet.c \
 	output-stats.c \
@@ -1169,7 +1184,6 @@ libsuricata_c_a_SOURCES = \
 	util-memcmp.c \
 	util-memrchr.c \
 	util-misc.c \
-	util-mpm-ac-bs.c \
 	util-mpm-ac.c \
 	util-mpm-ac-ks.c \
 	util-mpm-ac-ks-small.c \

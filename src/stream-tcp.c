@@ -5750,10 +5750,9 @@ TmEcode StreamTcp (ThreadVars *tv, Packet *p, void *data, PacketQueueNoLock *pq)
 TmEcode StreamTcpThreadInit(ThreadVars *tv, void *initdata, void **data)
 {
     SCEnter();
-    StreamTcpThread *stt = SCMalloc(sizeof(StreamTcpThread));
+    StreamTcpThread *stt = SCCalloc(1, sizeof(StreamTcpThread));
     if (unlikely(stt == NULL))
         SCReturnInt(TM_ECODE_FAILED);
-    memset(stt, 0, sizeof(StreamTcpThread));
     stt->ssn_pool_id = -1;
     StreamTcpThreadCacheEnable();
 
@@ -6851,9 +6850,9 @@ int StreamTcpBypassEnabled(void)
  *  \retval 0 no
  *  \retval 1 yes
  */
-int StreamTcpInlineMode(void)
+bool StreamTcpInlineMode(void)
 {
-    return (stream_config.flags & STREAMTCP_INIT_FLAG_INLINE) ? 1 : 0;
+    return (stream_config.flags & STREAMTCP_INIT_FLAG_INLINE);
 }
 
 

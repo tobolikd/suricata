@@ -79,7 +79,7 @@ static int pcre2_use_jit = 1;
 
 /* \brief Helper function for using pcre2_match with/without JIT
  */
-static inline int DetectPcreExec(DetectEngineThreadCtx *det_ctx, DetectPcreData *pd,
+static inline int DetectPcreExec(DetectEngineThreadCtx *det_ctx, const DetectPcreData *pd,
         const char *str, const size_t strlen, int start_offset, int options,
         pcre2_match_data *match)
 {
@@ -182,7 +182,7 @@ int DetectPcrePayloadMatch(DetectEngineThreadCtx *det_ctx, const Signature *s,
     uint32_t len = 0;
     PCRE2_SIZE capture_len = 0;
 
-    DetectPcreData *pe = (DetectPcreData *)smd->ctx;
+    const DetectPcreData *pe = (const DetectPcreData *)smd->ctx;
 
     if (pe->flags & DETECT_PCRE_RELATIVE) {
         ptr = payload + det_ctx->buffer_offset;
@@ -350,6 +350,7 @@ static DetectPcreData *DetectPcreParse (DetectEngineCtx *de_ctx,
         const char *regexstr, int *sm_list, char *capture_names,
         size_t capture_names_size, bool negate, AppProto *alproto)
 {
+    pcre2_match_data *match = NULL;
     int en;
     PCRE2_SIZE eo2;
     int opts = 0;
@@ -358,6 +359,8 @@ static DetectPcreData *DetectPcreParse (DetectEngineCtx *de_ctx,
     int ret = 0, res = 0;
     int check_host_header = 0;
     char op_str[64] = "";
+
+    bool apply_match_limit = false;
 
     int cut_capture = 0;
     char *fcap = strstr(regexstr, "flow:");
@@ -403,25 +406,31 @@ static DetectPcreData *DetectPcreParse (DetectEngineCtx *de_ctx,
     }
 
     char re[slen];
-    ret = pcre2_match(
-            parse_regex->regex, (PCRE2_SPTR8)regexstr, slen, 0, 0, parse_regex->match, NULL);
+
+    match = pcre2_match_data_create_from_pattern(parse_regex->regex, NULL);
+    if (!match) {
+        goto error;
+    }
+
+    ret = pcre2_match(parse_regex->regex, (PCRE2_SPTR8)regexstr, slen, 0, 0, match, NULL);
     if (ret <= 0) {
         SCLogError("pcre parse error: %s", regexstr);
         goto error;
     }
 
-    res = pcre2_substring_copy_bynumber(parse_regex->match, 1, (PCRE2_UCHAR8 *)re, &slen);
+    res = pcre2_substring_copy_bynumber(match, 1, (PCRE2_UCHAR8 *)re, &slen);
     if (res < 0) {
         SCLogError("pcre2_substring_copy_bynumber failed");
+        pcre2_match_data_free(match);
         return NULL;
     }
 
     if (ret > 2) {
         size_t copylen = sizeof(op_str);
-        res = pcre2_substring_copy_bynumber(
-                parse_regex->match, 2, (PCRE2_UCHAR8 *)op_str, &copylen);
+        res = pcre2_substring_copy_bynumber(match, 2, (PCRE2_UCHAR8 *)op_str, &copylen);
         if (res < 0) {
             SCLogError("pcre2_substring_copy_bynumber failed");
+            pcre2_match_data_free(match);
             return NULL;
         }
         op = op_str;
@@ -465,7 +474,7 @@ static DetectPcreData *DetectPcreParse (DetectEngineCtx *de_ctx,
                     break;
 
                 case 'O':
-                    pd->flags |= DETECT_PCRE_MATCH_LIMIT;
+                    apply_match_limit = true;
                     break;
 
                 case 'B': /* snort's option */
@@ -669,9 +678,8 @@ static DetectPcreData *DetectPcreParse (DetectEngineCtx *de_ctx,
         SCLogError("pcre2 could not create match context");
         goto error;
     }
-    pd->parse_regex.match = pcre2_match_data_create_from_pattern(pd->parse_regex.regex, NULL);
 
-    if (pd->flags & DETECT_PCRE_MATCH_LIMIT) {
+    if (apply_match_limit) {
         if (pcre_match_limit >= -1) {
             pcre2_set_match_limit(pd->parse_regex.context, pcre_match_limit);
         }
@@ -683,9 +691,12 @@ static DetectPcreData *DetectPcreParse (DetectEngineCtx *de_ctx,
         pcre2_set_match_limit(pd->parse_regex.context, SC_MATCH_LIMIT_DEFAULT);
         pcre2_set_recursion_limit(pd->parse_regex.context, SC_MATCH_LIMIT_RECURSION_DEFAULT);
     }
+
+    pcre2_match_data_free(match);
     return pd;
 
 error:
+    pcre2_match_data_free(match);
     DetectPcreFree(de_ctx, pd);
     return NULL;
 }
@@ -704,6 +715,7 @@ static int DetectPcreParseCapture(const char *regexstr, DetectEngineCtx *de_ctx,
     int capture_cnt = 0;
     int key = 0;
     size_t copylen;
+    pcre2_match_data *match = NULL;
 
     SCLogDebug("regexstr %s, pd %p", regexstr, pd);
 
@@ -739,12 +751,14 @@ static int DetectPcreParseCapture(const char *regexstr, DetectEngineCtx *de_ctx,
                 return -1;
 
             } else if (strncmp(name_array[name_idx], "flow:", 5) == 0) {
-                pd->capids[pd->idx] = VarNameStoreSetupAdd(name_array[name_idx]+5, VAR_TYPE_FLOW_VAR);
+                pd->capids[pd->idx] =
+                        VarNameStoreRegister(name_array[name_idx] + 5, VAR_TYPE_FLOW_VAR);
                 pd->captypes[pd->idx] = VAR_TYPE_FLOW_VAR;
                 pd->idx++;
 
             } else if (strncmp(name_array[name_idx], "pkt:", 4) == 0) {
-                pd->capids[pd->idx] = VarNameStoreSetupAdd(name_array[name_idx]+4, VAR_TYPE_PKT_VAR);
+                pd->capids[pd->idx] =
+                        VarNameStoreRegister(name_array[name_idx] + 4, VAR_TYPE_PKT_VAR);
                 pd->captypes[pd->idx] = VAR_TYPE_PKT_VAR;
                 SCLogDebug("id %u type %u", pd->capids[pd->idx], pd->captypes[pd->idx]);
                 pd->idx++;
@@ -773,21 +787,19 @@ static int DetectPcreParseCapture(const char *regexstr, DetectEngineCtx *de_ctx,
     while (1) {
         SCLogDebug("\'%s\'", regexstr);
 
-        ret = pcre2_match(parse_capture_regex->regex, (PCRE2_SPTR8)regexstr, strlen(regexstr), 0, 0,
-                parse_capture_regex->match, NULL);
+        ret = DetectParsePcreExec(parse_capture_regex, &match, regexstr, 0, 0);
         if (ret < 3) {
+            pcre2_match_data_free(match);
             return 0;
         }
         copylen = sizeof(type_str);
-        res = pcre2_substring_copy_bynumber(
-                parse_capture_regex->match, 1, (PCRE2_UCHAR8 *)type_str, &copylen);
+        res = pcre2_substring_copy_bynumber(match, 1, (PCRE2_UCHAR8 *)type_str, &copylen);
         if (res != 0) {
             SCLogError("pcre2_substring_copy_bynumber failed");
             goto error;
         }
         cap_buffer_len = strlen(regexstr) + 1;
-        res = pcre2_substring_copy_bynumber(
-                parse_capture_regex->match, 2, (PCRE2_UCHAR8 *)capture_str, &cap_buffer_len);
+        res = pcre2_substring_copy_bynumber(match, 2, (PCRE2_UCHAR8 *)capture_str, &cap_buffer_len);
         if (res != 0) {
             SCLogError("pcre2_substring_copy_bynumber failed");
             goto error;
@@ -803,23 +815,27 @@ static int DetectPcreParseCapture(const char *regexstr, DetectEngineCtx *de_ctx,
             SCLogError("rule can have maximally %d pkt/flow "
                        "var captures",
                     DETECT_PCRE_CAPTURE_MAX);
+            pcre2_match_data_free(match);
             return -1;
         }
 
         if (strcmp(type_str, "pkt") == 0) {
-            pd->capids[pd->idx] = VarNameStoreSetupAdd((char *)capture_str, VAR_TYPE_PKT_VAR);
+            pd->capids[pd->idx] = VarNameStoreRegister((char *)capture_str, VAR_TYPE_PKT_VAR);
             pd->captypes[pd->idx] = VAR_TYPE_PKT_VAR;
             SCLogDebug("id %u type %u", pd->capids[pd->idx], pd->captypes[pd->idx]);
             pd->idx++;
         } else if (strcmp(type_str, "flow") == 0) {
-            pd->capids[pd->idx] = VarNameStoreSetupAdd((char *)capture_str, VAR_TYPE_FLOW_VAR);
+            pd->capids[pd->idx] = VarNameStoreRegister((char *)capture_str, VAR_TYPE_FLOW_VAR);
             pd->captypes[pd->idx] = VAR_TYPE_FLOW_VAR;
             pd->idx++;
         }
 
         //SCLogNotice("pd->capname %s", pd->capname);
-        PCRE2_SIZE *ov = pcre2_get_ovector_pointer(parse_capture_regex->match);
+        PCRE2_SIZE *ov = pcre2_get_ovector_pointer(match);
         regexstr += ov[1];
+
+        pcre2_match_data_free(match);
+        match = NULL;
 
         if (regexstr >= orig_right_edge)
             break;
@@ -827,6 +843,7 @@ static int DetectPcreParseCapture(const char *regexstr, DetectEngineCtx *de_ctx,
     return 0;
 
 error:
+    pcre2_match_data_free(match);
     return -1;
 }
 
@@ -849,7 +866,6 @@ static int DetectPcreSetup (DetectEngineCtx *de_ctx, Signature *s, const char *r
 {
     SCEnter();
     DetectPcreData *pd = NULL;
-    SigMatch *sm = NULL;
     int parsed_sm_list = DETECT_SM_LIST_NOTSET;
     char capture_names[1024] = "";
     AppProto alproto = ALPROTO_UNKNOWN;
@@ -902,12 +918,10 @@ static int DetectPcreSetup (DetectEngineCtx *de_ctx, Signature *s, const char *r
     if (sm_list == -1)
         goto error;
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    SigMatch *sm = SigMatchAppendSMToList(de_ctx, s, DETECT_PCRE, (SigMatchCtx *)pd, sm_list);
+    if (sm == NULL) {
         goto error;
-    sm->type = DETECT_PCRE;
-    sm->ctx = (void *)pd;
-    SigMatchAppendSMToList(s, sm, sm_list);
+    }
 
     for (uint8_t x = 0; x < pd->idx; x++) {
         if (DetectFlowvarPostMatchSetup(de_ctx, s, pd->capids[x]) < 0)
@@ -954,6 +968,9 @@ static void DetectPcreFree(DetectEngineCtx *de_ctx, void *ptr)
     DetectParseFreeRegex(&pd->parse_regex);
     DetectUnregisterThreadCtxFuncs(de_ctx, pd, "pcre");
 
+    for (uint8_t i = 0; i < pd->idx; i++) {
+        VarNameStoreUnregister(pd->capids[i], pd->captypes[i]);
+    }
     SCFree(pd);
 
     return;
@@ -1992,10 +2009,11 @@ static int DetectPcreParseCaptureTest(void)
 
     SigGroupBuild(de_ctx);
 
-    uint32_t capid = VarNameStoreLookupByName("somecapture", VAR_TYPE_FLOW_VAR);
-    FAIL_IF (capid != 1);
-    capid = VarNameStoreLookupByName("anothercap", VAR_TYPE_PKT_VAR);
-    FAIL_IF (capid != 2);
+    uint32_t capid1 = VarNameStoreLookupByName("somecapture", VAR_TYPE_FLOW_VAR);
+    FAIL_IF(capid1 == 0);
+    uint32_t capid2 = VarNameStoreLookupByName("anothercap", VAR_TYPE_PKT_VAR);
+    FAIL_IF(capid2 == 0);
+    FAIL_IF(capid1 == capid2);
 
     DetectEngineCtxFree(de_ctx);
     PASS;

@@ -50,7 +50,7 @@ pub struct PgsqlTransaction {
     pub request: Option<PgsqlFEMessage>,
     pub responses: Vec<PgsqlBEMessage>,
 
-    pub data_row_cnt: u16,
+    pub data_row_cnt: u64,
     pub data_size: u64,
 
     tx_data: AppLayerTxData,
@@ -82,10 +82,10 @@ impl PgsqlTransaction {
     }
 
     pub fn incr_row_cnt(&mut self) {
-        self.data_row_cnt += 1;
+        self.data_row_cnt = self.data_row_cnt.saturating_add(1);
     }
 
-    pub fn get_row_cnt(&self) -> u16 {
+    pub fn get_row_cnt(&self) -> u64 {
         self.data_row_cnt
     }
 
@@ -117,6 +117,7 @@ pub enum PgsqlStateProgress {
     DataRowReceived,
     CommandCompletedReceived,
     ErrorMessageReceived,
+    CancelRequestReceived,
     ConnectionTerminated,
     #[cfg(test)]
     UnknownState,
@@ -151,7 +152,7 @@ impl Default for PgsqlState {
         Self::new()
     }
 }
-    
+
 impl PgsqlState {
     pub fn new() -> Self {
         Self {
@@ -229,6 +230,7 @@ impl PgsqlState {
             || self.state_progress == PgsqlStateProgress::SimpleQueryReceived
             || self.state_progress == PgsqlStateProgress::SSLRequestReceived
             || self.state_progress == PgsqlStateProgress::ConnectionTerminated
+            || self.state_progress == PgsqlStateProgress::CancelRequestReceived
         {
             let tx = self.new_tx();
             self.transactions.push_back(tx);
@@ -280,9 +282,15 @@ impl PgsqlState {
 
                 // Important to keep in mind that: "In simple Query mode, the format of retrieved values is always text, except when the given command is a FETCH from a cursor declared with the BINARY option. In that case, the retrieved values are in binary format. The format codes given in the RowDescription message tell which format is being used." (from pgsql official documentation)
             }
+            PgsqlFEMessage::CancelRequest(_) => Some(PgsqlStateProgress::CancelRequestReceived),
             PgsqlFEMessage::Terminate(_) => {
                 SCLogDebug!("Match: Terminate message");
                 Some(PgsqlStateProgress::ConnectionTerminated)
+            }
+            PgsqlFEMessage::UnknownMessageType(_) => {
+                SCLogDebug!("Match: Unknown message type");
+                // Not changing state when we don't know the message
+                None
             }
         }
     }
@@ -313,7 +321,7 @@ impl PgsqlState {
 
         // If there was gap, check we can sync up again.
         if self.request_gap {
-            if !probe_ts(input) {
+            if parser::parse_request(input).is_ok() {
                 // The parser now needs to decide what to do as we are not in sync.
                 // For now, we'll just try again next time.
                 SCLogDebug!("Suricata interprets there's a gap in the request");
@@ -479,7 +487,6 @@ impl PgsqlState {
                             let dummy_resp =
                                 PgsqlBEMessage::ConsolidatedDataRow(ConsolidatedDataRowPacket {
                                     identifier: b'D',
-                                    length: tx.get_row_cnt() as u32, // TODO this is ugly. We can probably get rid of `length` field altogether...
                                     row_cnt: tx.get_row_cnt(),
                                     data_size: tx.data_size, // total byte count of all data_row messages combined
                                 });
@@ -527,14 +534,6 @@ impl PgsqlState {
     }
 }
 
-/// Probe for a valid PostgreSQL request
-///
-/// PGSQL messages don't have a header per se, so we parse the slice for an ok()
-fn probe_ts(input: &[u8]) -> bool {
-    SCLogDebug!("We are in probe_ts");
-    parser::parse_request(input).is_ok()
-}
-
 /// Probe for a valid PostgreSQL response
 ///
 /// Currently, for parser usage only. We have a bit more logic in the function
@@ -558,8 +557,20 @@ pub unsafe extern "C" fn rs_pgsql_probing_parser_ts(
     if input_len >= 1 && !input.is_null() {
 
         let slice: &[u8] = build_slice!(input, input_len as usize);
-        if probe_ts(slice) {
-            return ALPROTO_PGSQL;
+
+        match parser::parse_request(slice) {
+            Ok((_, request)) => {
+                if let PgsqlFEMessage::UnknownMessageType(_) = request {
+                    return ALPROTO_FAILED;
+                }
+                return ALPROTO_PGSQL;
+            }
+            Err(Err::Incomplete(_)) => {
+                return ALPROTO_UNKNOWN;
+            }
+            Err(_e) => {
+                return ALPROTO_FAILED;
+            }
         }
     }
     return ALPROTO_UNKNOWN;
@@ -579,7 +590,10 @@ pub unsafe extern "C" fn rs_pgsql_probing_parser_tc(
         }
 
         match parser::pgsql_parse_response(slice) {
-            Ok((_, _response)) => {
+            Ok((_, response)) => {
+                if let PgsqlBEMessage::UnknownMessageType(_) = response {
+                    return ALPROTO_FAILED;
+                }
                 return ALPROTO_PGSQL;
             }
             Err(Err::Incomplete(_)) => {
@@ -780,37 +794,6 @@ pub unsafe extern "C" fn rs_pgsql_register_parser() {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn test_request_probe() {
-        // An SSL Request
-        let buf: &[u8] = &[0x00, 0x00, 0x00, 0x08, 0x04, 0xd2, 0x16, 0x2f];
-        assert!(probe_ts(buf));
-
-        // incomplete messages, probe must return false
-        assert!(!probe_ts(&buf[0..6]));
-        assert!(!probe_ts(&buf[0..3]));
-
-        // length is wrong (7), probe must return false
-        let buf: &[u8] = &[0x00, 0x00, 0x00, 0x07, 0x04, 0xd2, 0x16, 0x2f];
-        assert!(!probe_ts(buf));
-
-        // A valid startup message/request
-        let buf: &[u8] = &[
-            0x00, 0x00, 0x00, 0x26, 0x00, 0x03, 0x00, 0x00, 0x75, 0x73, 0x65, 0x72, 0x00, 0x6f,
-            0x72, 0x79, 0x78, 0x00, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x00, 0x6d,
-            0x61, 0x69, 0x6c, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x00, 0x00,
-        ];
-        assert!(probe_ts(buf));
-
-        // A non valid startup message/request (length is shorter by one. Would `exact!` help?)
-        let buf: &[u8] = &[
-            0x00, 0x00, 0x00, 0x25, 0x00, 0x03, 0x00, 0x00, 0x75, 0x73, 0x65, 0x72, 0x00, 0x6f,
-            0x72, 0x79, 0x78, 0x00, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x00, 0x6d,
-            0x61, 0x69, 0x6c, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x00, 0x00,
-        ];
-        assert!(!probe_ts(buf));
-    }
 
     #[test]
     fn test_response_probe() {

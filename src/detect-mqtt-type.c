@@ -43,7 +43,7 @@ void MQTTTypeRegisterTests(void);
 void DetectMQTTTypeFree(DetectEngineCtx *de_ctx, void *);
 
 /**
- * \brief Registration function for ipopts: keyword
+ * \brief Registration function for mqtt.type: keyword
  */
 void DetectMQTTTypeRegister (void)
 {
@@ -57,7 +57,7 @@ void DetectMQTTTypeRegister (void)
     sigmatch_table[DETECT_AL_MQTT_TYPE].RegisterTests = MQTTTypeRegisterTests;
 #endif
 
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "mqtt.type", ALPROTO_MQTT, SIG_FLAG_TOSERVER, 1, DetectEngineInspectGenericList, NULL);
 
     mqtt_type_id = DetectBufferTypeGetByName("mqtt.type");
@@ -140,7 +140,6 @@ error:
 static int DetectMQTTTypeSetup (DetectEngineCtx *de_ctx, Signature *s, const char *rawstr)
 {
     uint8_t *de = NULL;
-    SigMatch *sm = NULL;
 
     if (DetectSignatureSetAppProto(s, ALPROTO_MQTT) < 0)
         return -1;
@@ -149,22 +148,16 @@ static int DetectMQTTTypeSetup (DetectEngineCtx *de_ctx, Signature *s, const cha
     if (de == NULL)
         goto error;
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_AL_MQTT_TYPE, (SigMatchCtx *)de, mqtt_type_id) ==
+            NULL) {
         goto error;
-
-    sm->type = DETECT_AL_MQTT_TYPE;
-    sm->ctx = (SigMatchCtx *)de;
-
-    SigMatchAppendSMToList(s, sm, mqtt_type_id);
+    }
 
     return 0;
 
 error:
     if (de != NULL)
         SCFree(de);
-    if (sm != NULL)
-        SCFree(sm);
     return -1;
 }
 

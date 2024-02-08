@@ -5,49 +5,125 @@ Suricata comes with several rule keywords to match on various file
 properties. They depend on properly configured
 :doc:`../file-extraction/file-extraction`.
 
-filename
---------
+file.data
+---------
 
-Matches on the file name.
-
-Syntax::
-
-  filename:<string>;
+The ``file.data`` sticky buffer matches on contents of files that are 
+seen in flows that Suricata evaluates. The various payload keywords can
+be used (e.g. ``startswith``, ``nocase`` and ``bsize``) with ``file.data``.
 
 Example::
 
-  filename:"secret";
+  alert smtp any any -> any any (msg:"smtp app layer file.data example"; \
+ file.data; content:"example file content"; sid:1; rev:1)
+
+  alert http any any -> any any (msg:"http app layer file.data example"; \
+ file.data; content:"example file content"; sid:2; rev:1)
+
+  alert http2 any any -> any any (msg:"http2 app layer file.data example"; \
+ file.data; content:"example file content"; sid:3; rev:1;)
+
+  alert nfs any any -> any any (msg:"nfs app layer file.data example"; \
+ file.data; content:" "; sid:5; rev:1)
+
+  alert ftp-data any any -> any any (msg:"ftp app layer file.data example"; \
+ file.data; content:"example file content"; sid:6; rev:1;)
+
+  alert tcp any any -> any any (msg:"tcp file.data example"; \
+ file.data; content:"example file content"; sid:4; rev:1)
+
+**Note** file_data is the legacy notation but can still be used.
+
+
+file.name
+---------
+
+``file.name`` is a sticky buffer that is used to look at filenames
+that are seen in flows that Suricata evaluates. The various payload
+keywords can be used (e.g. ``startswith``, ``nocase`` and ``bsize``)
+with ``file.name``.
+
+Example::
+
+  file.name; content:"examplefilename";
 
 ``file.name`` supports multiple buffer matching, see :doc:`multi-buffer-matching`.
 
-fileext
--------
-
-Matches on the extension of a file name.
-
-Syntax::
-
-  fileext:<string>;
+**Note** ``filename`` can still be used. A notable difference between
+``file.name`` and ``filename`` is that ``filename`` assumes ``nocase``
+by default. In the example below the two signatures are considered
+the same.
 
 Example::
 
-  fileext:"jpg";
+  filename:"examplefilename";
 
-filemagic
----------
+  file.name; content:"examplefilename"; nocase;
+
+fileext
+--------
+
+``fileext`` is used to look at individual file extensions that are
+seen in flows that Suricata evaluates.
+
+Example::
+
+  fileext:"pdf";
+
+**Note:** ``fileext`` does not allow partial matches. For example, if
+a PDF file (.pdf) is seen by a Suricata signature with
+fileext:"pd"; the signature will not produce an alert.
+
+**Note:** ``fileext`` assumes ``nocase`` by default. This means
+that a file with the extension .PDF will be seen the same as if
+the file had an extension of .pdf.
+
+**Note:** ``fileext`` and ``file.name`` can both be used to match on
+file extensions. In the example below the two signatures are
+considered the same.
+
+Example::
+
+  fileext:"pdf";
+
+  file.name; content:".pdf"; nocase; endswith;
+
+**Note**: While``fileeext`` and ``file.name`` can both be used
+to match on file extensions, ``file.name`` allows for partial
+matching on file extensions. The following would match on a file
+with the extension of .pd as well as .pdf.
+
+Example::
+
+  file.name; content:".pd";
+
+file.magic
+----------
 
 Matches on the information libmagic returns about a file.
 
-Syntax::
+Example::
 
-  filemagic:<string>;
+  file.magic; content:"executable for MS Windows";
+
+**Note** ``filemagic`` can still be used. The only difference between
+``file.magic`` and ``file.magic`` is that ``filemagic`` assumes ``nocase``
+by default. In the example below the two signatures are considered
+the same.
 
 Example::
 
   filemagic:"executable for MS Windows";
 
-Note: as libmagic versions differ between installations, the returned
-information may also slightly change. See also #437.
+  file.magic; content:"executable for MS Windows"; nocase;
+
+Note: Suricata currently uses its underlying operating systems
+version/implementation of libmagic. Different versions and
+implementations of libmagic do not return the same information.
+Additionally there are varying Suricata performance impacts
+based on the version and implementation of libmagic.
+Additional information about Suricata and libmagic can be found
+here: https://redmine.openinfosecfoundation.org/issues/437
 
 ``file.magic`` supports multiple buffer matching, see :doc:`multi-buffer-matching`.
 

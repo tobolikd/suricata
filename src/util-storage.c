@@ -118,11 +118,9 @@ int StorageRegister(const StorageEnum type, const char *name, const unsigned int
         list = list->next;
     }
 
-    StorageList *entry = SCMalloc(sizeof(StorageList));
+    StorageList *entry = SCCalloc(1, sizeof(StorageList));
     if (unlikely(entry == NULL))
         return -1;
-
-    memset(entry, 0x00, sizeof(StorageList));
 
     entry->map.type = type;
     entry->map.name = name;
@@ -151,18 +149,16 @@ int StorageFinalize(void)
     if (count == 0)
         return 0;
 
-    storage_map = SCMalloc(sizeof(StorageMapping *) * STORAGE_MAX);
+    storage_map = SCCalloc(STORAGE_MAX, sizeof(StorageMapping *));
     if (unlikely(storage_map == NULL)) {
         return -1;
     }
-    memset(storage_map, 0x00, sizeof(StorageMapping *) * STORAGE_MAX);
 
     for (i = 0; i < STORAGE_MAX; i++) {
         if (storage_max_id[i] > 0) {
-            storage_map[i] = SCMalloc(sizeof(StorageMapping) * storage_max_id[i]);
+            storage_map[i] = SCCalloc(storage_max_id[i], sizeof(StorageMapping));
             if (storage_map[i] == NULL)
                 return -1;
-            memset(storage_map[i], 0x00, sizeof(StorageMapping) * storage_max_id[i]);
         }
     }
 
@@ -222,7 +218,7 @@ void *StorageGetById(const Storage *storage, const StorageEnum type, const int i
     SCLogDebug("storage %p id %d", storage, id);
     if (storage == NULL)
         return NULL;
-    return storage[id];
+    return storage[id].ptr;
 }
 
 int StorageSetById(Storage *storage, const StorageEnum type, const int id, void *ptr)
@@ -233,7 +229,7 @@ int StorageSetById(Storage *storage, const StorageEnum type, const int id, void 
     SCLogDebug("storage %p id %d", storage, id);
     if (storage == NULL)
         return -1;
-    storage[id] = ptr;
+    storage[id].ptr = ptr;
     return 0;
 }
 
@@ -245,45 +241,14 @@ void *StorageAllocByIdPrealloc(Storage *storage, StorageEnum type, int id)
     SCLogDebug("storage %p id %d", storage, id);
 
     StorageMapping *map = &storage_map[type][id];
-    if (storage[id] == NULL && map->Alloc != NULL) {
-        storage[id] = map->Alloc(map->size);
-        if (storage[id] == NULL) {
+    if (storage[id].ptr == NULL && map->Alloc != NULL) {
+        storage[id].ptr = map->Alloc(map->size);
+        if (storage[id].ptr == NULL) {
             return NULL;
         }
     }
 
-    return storage[id];
-}
-
-void *StorageAllocById(Storage **storage, StorageEnum type, int id)
-{
-#ifdef DEBUG
-    BUG_ON(!storage_registration_closed);
-#endif
-    SCLogDebug("storage %p id %d", storage, id);
-
-    StorageMapping *map = &storage_map[type][id];
-    Storage *store = *storage;
-    if (store == NULL) {
-        // coverity[suspicious_sizeof : FALSE]
-        store = SCMalloc(sizeof(void *) * storage_max_id[type]);
-        if (unlikely(store == NULL))
-        return NULL;
-        memset(store, 0x00, sizeof(void *) * storage_max_id[type]);
-    }
-    SCLogDebug("store %p", store);
-
-    if (store[id] == NULL && map->Alloc != NULL) {
-        store[id] = map->Alloc(map->size);
-        if (store[id] == NULL) {
-            SCFree(store);
-            *storage = NULL;
-            return NULL;
-        }
-    }
-
-    *storage = store;
-    return store[id];
+    return storage[id].ptr;
 }
 
 void StorageFreeById(Storage *storage, StorageEnum type, int id)
@@ -300,10 +265,10 @@ void StorageFreeById(Storage *storage, StorageEnum type, int id)
     Storage *store = storage;
     if (store != NULL) {
         SCLogDebug("store %p", store);
-        if (store[id] != NULL) {
+        if (store[id].ptr != NULL) {
             StorageMapping *map = &storage_map[type][id];
-            map->Free(store[id]);
-            store[id] = NULL;
+            map->Free(store[id].ptr);
+            store[id].ptr = NULL;
         }
     }
 }
@@ -323,38 +288,12 @@ void StorageFreeAll(Storage *storage, StorageEnum type)
     Storage *store = storage;
     int i;
     for (i = 0; i < storage_max_id[type]; i++) {
-        if (store[i] != NULL) {
+        if (store[i].ptr != NULL) {
             StorageMapping *map = &storage_map[type][i];
-            map->Free(store[i]);
-            store[i] = NULL;
+            map->Free(store[i].ptr);
+            store[i].ptr = NULL;
         }
     }
-}
-
-void StorageFree(Storage **storage, StorageEnum type)
-{
-    if (*storage == NULL)
-        return;
-
-#ifdef DEBUG
-    BUG_ON(!storage_registration_closed);
-#endif
-#ifdef UNITTESTS
-    if (storage_map == NULL)
-        return;
-#endif
-
-    Storage *store = *storage;
-    int i;
-    for (i = 0; i < storage_max_id[type]; i++) {
-        if (store[i] != NULL) {
-            StorageMapping *map = &storage_map[type][i];
-            map->Free(store[i]);
-            store[i] = NULL;
-        }
-    }
-    SCFree(*storage);
-    *storage = NULL;
 }
 
 #ifdef UNITTESTS
@@ -386,87 +325,6 @@ static int StorageTest01(void)
 
     if (StorageFinalize() < 0)
         goto error;
-
-    StorageCleanup();
-    return 1;
-error:
-    StorageCleanup();
-    return 0;
-}
-
-struct StorageTest02Data {
-    int abc;
-};
-
-static void *StorageTest02Init(unsigned int size)
-{
-    struct StorageTest02Data *data = (struct StorageTest02Data *)SCMalloc(size);
-    if (data != NULL)
-        data->abc = 1234;
-    return (void *)data;
-}
-
-static int StorageTest02(void)
-{
-    struct StorageTest02Data *test = NULL;
-
-    StorageInit();
-
-    int id1 = StorageRegister(STORAGE_HOST, "test", 4, StorageTest02Init, StorageTestFree);
-    if (id1 < 0) {
-        printf("StorageRegister failed (2): ");
-        goto error;
-    }
-    int id2 = StorageRegister(STORAGE_HOST, "test2", 4, StorageTest02Init, StorageTestFree);
-    if (id2 < 0) {
-        printf("StorageRegister failed (2): ");
-        goto error;
-    }
-
-    if (StorageFinalize() < 0) {
-        printf("StorageFinalize failed: ");
-        goto error;
-    }
-
-    Storage *storage = NULL;
-    void *data = StorageAllocById(&storage, STORAGE_HOST, id1);
-    if (data == NULL) {
-        printf("StorageAllocById failed, data == NULL, storage %p: ", storage);
-        goto error;
-    }
-    test = (struct StorageTest02Data *)data;
-    if (test->abc != 1234) {
-        printf("setup failed, test->abc != 1234, but %d (1):", test->abc);
-        goto error;
-    }
-    test->abc = 4321;
-
-    data = StorageAllocById(&storage, STORAGE_HOST, id2);
-    if (data == NULL) {
-        printf("StorageAllocById failed, data == NULL, storage %p: ", storage);
-        goto error;
-    }
-    test = (struct StorageTest02Data *)data;
-    if (test->abc != 1234) {
-        printf("setup failed, test->abc != 1234, but %d (2):", test->abc);
-        goto error;
-    }
-
-    data = StorageGetById(storage, STORAGE_HOST, id1);
-    if (data == NULL) {
-        printf("StorageAllocById failed, data == NULL, storage %p: ", storage);
-        goto error;
-    }
-    test = (struct StorageTest02Data *)data;
-    if (test->abc != 4321) {
-        printf("setup failed, test->abc != 4321, but %d (3):", test->abc);
-        goto error;
-    }
-
-    //StorageFreeById(storage, STORAGE_HOST, id1);
-    //StorageFreeById(storage, STORAGE_HOST, id2);
-
-    StorageFree(&storage, STORAGE_HOST);
 
     StorageCleanup();
     return 1;
@@ -546,7 +404,6 @@ error:
 void StorageRegisterTests(void)
 {
     UtRegisterTest("StorageTest01", StorageTest01);
-    UtRegisterTest("StorageTest02", StorageTest02);
     UtRegisterTest("StorageTest03", StorageTest03);
 }
 #endif

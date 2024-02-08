@@ -1,4 +1,3 @@
-/* vi: set et ts=4: */
 /* Copyright (C) 2007-2022 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
@@ -865,8 +864,8 @@ int LogFileFreeCtx(LogFileCtx *lf_ctx)
         SCReturnInt(0);
     }
 
-    if (lf_ctx->type == LOGFILE_TYPE_PLUGIN) {
-        lf_ctx->plugin.plugin->Deinit(lf_ctx->plugin.init_data);
+    if (lf_ctx->type == LOGFILE_TYPE_PLUGIN && lf_ctx->parent != NULL) {
+        lf_ctx->plugin.plugin->ThreadDeinit(lf_ctx->plugin.init_data, lf_ctx->plugin.thread_data);
     }
 
     if (lf_ctx->threaded) {
@@ -900,6 +899,13 @@ int LogFileFreeCtx(LogFileCtx *lf_ctx)
 
     if (!lf_ctx->threaded) {
         OutputUnregisterFileRotationFlag(&lf_ctx->rotation_flag);
+    }
+
+    /* Deinitialize output plugins. We only want to call this for the
+     * parent of threaded output, or always for non-threaded
+     * output. */
+    if (lf_ctx->type == LOGFILE_TYPE_PLUGIN && lf_ctx->parent == NULL) {
+        lf_ctx->plugin.plugin->Deinit(lf_ctx->plugin.init_data);
     }
 
     memset(lf_ctx, 0, sizeof(*lf_ctx));

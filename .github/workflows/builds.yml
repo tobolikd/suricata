@@ -12,6 +12,10 @@ on:
       SV_REPO:
       SV_BRANCH:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: read-all
 
 env:
@@ -284,6 +288,18 @@ jobs:
           test -e /usr/local/lib/suricata/python/suricata/update/configs/modify.conf
           test -e /usr/local/lib/suricata/python/suricata/update/configs/threshold.in
           test -e /usr/local/lib/suricata/python/suricata/update/configs/update.yaml
+      - name: Build C json filetype plugin
+        working-directory: examples/plugins/c-json-filetype
+        run: make
+      - name: Check C json filetype plugin
+        run: test -e examples/plugins/c-json-filetype/.libs/json-filetype.so.0.0.0
+      - name: Installing headers and library
+        run: |
+          make install-headers
+          make install-library
+      - name: Test plugin build with Makefile.example
+        working-directory: examples/plugins/c-json-filetype
+        run: PATH=/usr/local/bin:$PATH make -f Makefile.example
 
   almalinux-9-templates:
     name: AlmaLinux 9 Test Templates
@@ -558,7 +574,7 @@ jobs:
           name: prep
           path: prep
       - run: tar xf prep/suricata-verify.tar.gz
-      - run: python3 ./suricata-verify/run.py -q
+      - run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: suricata-update -V
       - run: suricatasc -h
 
@@ -645,7 +661,7 @@ jobs:
           name: prep
           path: prep
       - run: tar xf prep/suricata-verify.tar.gz
-      - run: python3 ./suricata-verify/run.py -q
+      - run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: suricata-update -V
       - run: suricatasc -h
 
@@ -724,7 +740,7 @@ jobs:
           name: prep
           path: prep
       - run: tar xf prep/suricata-verify.tar.gz
-      - run: python3 ./suricata-verify/run.py -q
+      - run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: suricata-update -V
       - run: suricatasc -h
 
@@ -812,7 +828,7 @@ jobs:
       - name: Extracting suricata-verify
         run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: llvm-profdata merge -o default.profdata $(find suricata-verify/tests/ -name '*.profraw')
       - run: llvm-cov show ./src/suricata -instr-profile=default.profdata --show-instantiations --ignore-filename-regex="^/root/.*" > coverage.txt
       - name: Upload coverage to Codecov
@@ -908,7 +924,7 @@ jobs:
       - name: Extracting suricata-verify
         run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       # Now install and make sure headers and libraries aren't
       # installed until requested.
       - run: make install
@@ -997,7 +1013,7 @@ jobs:
       - name: Extracting suricata-verify
         run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       # Now install and make sure headers and libraries aren't
       # installed until requested.
       - run: make install
@@ -1014,11 +1030,11 @@ jobs:
       - run: suricata-update -V
       - run: suricatasc -h
 
-  # Fedora 37 build using Clang.
-  fedora-37-clang:
-    name: Fedora 37 (clang, debug, asan, wshadow, rust-strict, systemd)
+  # Fedora 39 build using Clang.
+  fedora-39-clang:
+    name: Fedora 39 (clang, debug, asan, wshadow, rust-strict, systemd)
     runs-on: ubuntu-latest
-    container: fedora:37
+    container: fedora:39
     needs: [prepare-deps, prepare-cbindgen]
     steps:
 
@@ -1041,6 +1057,7 @@ jobs:
                 autoconf \
                 automake \
                 cargo \
+                cbindgen \
                 ccache \
                 clang \
                 diffutils \
@@ -1082,12 +1099,6 @@ jobs:
           path: prep
       - run: tar xf prep/libhtp.tar.gz
       - run: tar xf prep/suricata-update.tar.gz
-      - name: Setup cbindgen
-        run: |
-          mkdir -p $HOME/.cargo/bin
-          cp prep/cbindgen $HOME/.cargo/bin
-          chmod 755 $HOME/.cargo/bin/cbindgen
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - run: ./autogen.sh
       - run: CC="clang" CFLAGS="$DEFAULT_CFLAGS -Wshadow -fsanitize=address -fno-omit-frame-pointer" ./configure --enable-debug --enable-unittests --disable-shared --enable-rust-strict --enable-hiredis --enable-nfqueue --enable-lua
         env:
@@ -1099,7 +1110,7 @@ jobs:
       - name: Extracting suricata-verify
         run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       # Now install and make sure headers and libraries aren't install
       # until requested.
       - run: make install
@@ -1118,11 +1129,11 @@ jobs:
       # Check compilation against systemd
       - run: ldd src/suricata | grep libsystemd &> /dev/null
 
-  # Fedora 37 build using GCC.
-  fedora-37-gcc:
-    name: Fedora 37 (gcc, debug, asan, wshadow, rust-strict)
+  # Fedora 39 build using GCC.
+  fedora-39-gcc:
+    name: Fedora 39 (gcc, debug, asan, wshadow, rust-strict)
     runs-on: ubuntu-latest
-    container: fedora:37
+    container: fedora:39
     needs: [prepare-deps, prepare-cbindgen]
     steps:
 
@@ -1138,6 +1149,7 @@ jobs:
                 autoconf \
                 automake \
                 cargo \
+                cbindgen \
                 ccache \
                 diffutils \
                 file-devel \
@@ -1175,12 +1187,6 @@ jobs:
           path: prep
       - run: tar xf prep/libhtp.tar.gz
       - run: tar xf prep/suricata-update.tar.gz
-      - name: Setup cbindgen
-        run: |
-          mkdir -p $HOME/.cargo/bin
-          cp prep/cbindgen $HOME/.cargo/bin
-          chmod 755 $HOME/.cargo/bin/cbindgen
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - run: ./autogen.sh
       - run: ./configure --enable-debug --enable-unittests --disable-shared --enable-rust-strict --enable-hiredis --enable-nfqueue
         env:
@@ -1193,7 +1199,7 @@ jobs:
       - name: Extracting suricata-verify
         run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       # Now install and make sure headers and libraries aren't install
       # until requested.
       - run: make install
@@ -1213,10 +1219,10 @@ jobs:
   # This job builds and tests Suricata as a non-root user as some
   # issues only show up when not running as root, and by default all
   # jobs in GitHub actions are run as root inside the container.
-  fedora-37-non-root:
-    name: Fedora 37 (non-root, debug, clang, asan, wshadow, rust-strict, systemd)
+  fedora-39-non-root:
+    name: Fedora 39 (non-root, debug, clang, asan, wshadow, rust-strict, systemd)
     runs-on: ubuntu-latest
-    container: fedora:37
+    container: fedora:39
     needs: [prepare-deps]
     steps:
       - run: |
@@ -1288,7 +1294,7 @@ jobs:
       - run: sudo -u suricata -s make check
         working-directory: /home/suricata/suricata
 
-      - run: sudo -u suricata -s python3 ./suricata-verify/run.py -q
+      - run: sudo -u suricata -s python3 ./suricata-verify/run.py -q --debug-failed
         working-directory: /home/suricata/suricata
 
   # Test that ./configure fails out of libjansson is not available.
@@ -1649,7 +1655,7 @@ jobs:
       - name: Extracting suricata-verify
         run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       # Now install and make sure headers and libraries aren't install
       # until requested.
       - run: make install
@@ -1799,7 +1805,7 @@ jobs:
       - name: Extracting suricata-verify
         run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
 
   # test build with afl and fuzztargets
   ubuntu-22-04-fuzz:
@@ -1961,7 +1967,7 @@ jobs:
     needs: [ prepare-deps, prepare-cbindgen ]
     strategy:
       matrix:
-        dpdk_version: [ 22.11.1, 21.11.3, 20.11.7, 19.11.14 ]
+        dpdk_version: [ 22.11.3, 21.11.5, 20.11.9, 19.11.14 ]
     steps:
 
       # Cache Rust stuff.
@@ -2095,7 +2101,6 @@ jobs:
               libjansson-dev \
               libjansson4 \
               liblua5.1-dev \
-              libnss3-dev \
               libnspr4-dev \
               libnuma-dev \
               liblz4-dev \
@@ -2125,7 +2130,8 @@ jobs:
       - run: CFLAGS="${DEFAULT_CFLAGS}" ./configure --enable-unittests
       - run: make -j2
       - run: make check
-      - run: make -j2 distcheck
+        # -j2 caused random failures during cargo vendor
+      - run: make distcheck
         env:
           DISTCHECK_CONFIGURE_FLAGS: "--enable-unittests --enable-debug --enable-lua --enable-geoip --enable-profiling --enable-profiling-locks --enable-dpdk"
       - run: test -e doc/userguide/suricata.1
@@ -2134,7 +2140,7 @@ jobs:
         run: make doc
         working-directory: rust
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: make install
       - run: suricata-update -V
       - run: suricatasc -h
@@ -2179,7 +2185,6 @@ jobs:
               libmagic-dev \
               libjansson-dev \
               libjansson4 \
-              libnss3-dev \
               libnspr4-dev \
               liblz4-dev \
               libssl-dev \
@@ -2259,7 +2264,6 @@ jobs:
               libjansson-dev \
               libjansson4 \
               liblua5.1-dev \
-              libnss3-dev \
               libnspr4-dev \
               libnuma-dev \
               liblz4-dev \
@@ -2300,7 +2304,7 @@ jobs:
         run: make doc
         working-directory: rust
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: make install
       - run: suricata-update -V
       - run: suricatasc -h
@@ -2376,7 +2380,7 @@ jobs:
       - run: make check
       - run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: make install
       - run: suricata-update -V
       - run: suricatasc -h
@@ -2427,7 +2431,6 @@ jobs:
                 zlib1g \
                 zlib1g-dev \
                 clang \
-                libbpf-dev \
                 libelf-dev
       - name: Install Rust
         run: curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain $RUST_VERSION_KNOWN -y
@@ -2445,12 +2448,12 @@ jobs:
           cp prep/cbindgen $HOME/.cargo/bin
           chmod 755 $HOME/.cargo/bin/cbindgen
       - run: ./autogen.sh
-      - run: CFLAGS="${DEFAULT_CFLAGS}" ./configure --enable-unittests --enable-fuzztargets --enable-ebpf --enable-ebpf-build
+      - run: CFLAGS="${DEFAULT_CFLAGS}" ./configure --enable-unittests --enable-fuzztargets
       - run: make -j2
       - run: make check
       - run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: make install
       - run: suricata-update -V
       - run: suricatasc -h
@@ -2502,7 +2505,7 @@ jobs:
       - run: rm libhtp/VERSION && make check
       - run: tar xf prep/suricata-verify.tar.gz
       - name: Running suricata-verify
-        run: python3 ./suricata-verify/run.py -q
+        run: python3 ./suricata-verify/run.py -q --debug-failed
       - run: make install
       - run: suricata-update -V
       - run: suricatasc -h
@@ -2559,7 +2562,7 @@ jobs:
           ./src/suricata --build-info
           ./src/suricata -u -l /tmp/
           # need cwd in path due to npcap dlls (see above)
-          PATH="$PATH:$(pwd)" python3 ./suricata-verify/run.py -q
+          PATH="$PATH:$(pwd)" python3 ./suricata-verify/run.py -q --debug-failed
       - run: make install
       - run: suricata-update -V
 
@@ -2603,7 +2606,7 @@ jobs:
         run: |
           ./src/suricata --build-info
           ./src/suricata -u -l /tmp/
-          python3 ./suricata-verify/run.py -q
+          python3 ./suricata-verify/run.py -q --debug-failed
       - run: make install
       - run: suricata-update -V
 

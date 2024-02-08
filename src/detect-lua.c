@@ -123,9 +123,9 @@ void DetectLuaRegister(void)
 #endif
     g_smtp_generic_list_id = DetectBufferTypeRegister("smtp_generic");
 
-    DetectAppLayerInspectEngineRegister2("smtp_generic", ALPROTO_SMTP, SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister("smtp_generic", ALPROTO_SMTP, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectGenericList, NULL);
-    DetectAppLayerInspectEngineRegister2("smtp_generic", ALPROTO_SMTP, SIG_FLAG_TOCLIENT, 0,
+    DetectAppLayerInspectEngineRegister("smtp_generic", ALPROTO_SMTP, SIG_FLAG_TOCLIENT, 0,
             DetectEngineInspectGenericList, NULL);
 
     SCLogDebug("registering lua rule option");
@@ -596,12 +596,11 @@ static void *DetectLuaThreadInit(void *data)
     DetectLuaData *lua = (DetectLuaData *)data;
     BUG_ON(lua == NULL);
 
-    DetectLuaThreadData *t = SCMalloc(sizeof(DetectLuaThreadData));
+    DetectLuaThreadData *t = SCCalloc(1, sizeof(DetectLuaThreadData));
     if (unlikely(t == NULL)) {
         SCLogError("couldn't alloc ctx memory");
         return NULL;
     }
-    memset(t, 0x00, sizeof(DetectLuaThreadData));
 
     t->alproto = lua->alproto;
     t->flags = lua->flags;
@@ -681,11 +680,9 @@ static DetectLuaData *DetectLuaParse (DetectEngineCtx *de_ctx, const char *str)
     DetectLuaData *lua = NULL;
 
     /* We have a correct lua option */
-    lua = SCMalloc(sizeof(DetectLuaData));
+    lua = SCCalloc(1, sizeof(DetectLuaData));
     if (unlikely(lua == NULL))
         goto error;
-
-    memset(lua, 0x00, sizeof(DetectLuaData));
 
     if (strlen(str) && str[0] == '!') {
         lua->negated = 1;
@@ -794,7 +791,7 @@ static int DetectLuaSetupPrime(DetectEngineCtx *de_ctx, DetectLuaData *ld, const
                         goto error;
                     }
 
-                    uint32_t idx = VarNameStoreSetupAdd((char *)value, VAR_TYPE_FLOW_VAR);
+                    uint32_t idx = VarNameStoreRegister(value, VAR_TYPE_FLOW_VAR);
                     ld->flowvar[ld->flowvars++] = idx;
                     SCLogDebug("script uses flowvar %u with script id %u", idx, ld->flowvars - 1);
                 }
@@ -816,7 +813,7 @@ static int DetectLuaSetupPrime(DetectEngineCtx *de_ctx, DetectLuaData *ld, const
                         goto error;
                     }
 
-                    uint32_t idx = VarNameStoreSetupAdd((char *)value, VAR_TYPE_FLOW_INT);
+                    uint32_t idx = VarNameStoreRegister(value, VAR_TYPE_FLOW_INT);
                     ld->flowint[ld->flowints++] = idx;
                     SCLogDebug("script uses flowint %u with script id %u", idx, ld->flowints - 1);
                 }
@@ -1013,7 +1010,6 @@ error:
 static int DetectLuaSetup (DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     DetectLuaData *lua = NULL;
-    SigMatch *sm = NULL;
 
     /* First check if Lua rules are enabled, by default Lua in rules
      * is disabled. */
@@ -1047,12 +1043,6 @@ static int DetectLuaSetup (DetectEngineCtx *de_ctx, Signature *s, const char *st
 
     /* Okay so far so good, lets get this into a SigMatch
      * and put it in the Signature. */
-    sm = SigMatchAlloc();
-    if (sm == NULL)
-        goto error;
-
-    sm->type = DETECT_LUA;
-    sm->ctx = (SigMatchCtx *)lua;
 
     int list = -1;
     if (lua->alproto == ALPROTO_UNKNOWN) {
@@ -1118,15 +1108,15 @@ static int DetectLuaSetup (DetectEngineCtx *de_ctx, Signature *s, const char *st
         goto error;
     }
 
-    SigMatchAppendSMToList(s, sm, list);
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_LUA, (SigMatchCtx *)lua, list) == NULL) {
+        goto error;
+    }
 
     return 0;
 
 error:
     if (lua != NULL)
         DetectLuaFree(de_ctx, lua);
-    if (sm != NULL)
-        SCFree(sm);
     return -1;
 }
 
@@ -1165,6 +1155,13 @@ static void DetectLuaFree(DetectEngineCtx *de_ctx, void *ptr)
             SCFree(lua->buffername);
         if (lua->filename)
             SCFree(lua->filename);
+
+        for (uint16_t i = 0; i < lua->flowints; i++) {
+            VarNameStoreUnregister(lua->flowint[i], VAR_TYPE_FLOW_INT);
+        }
+        for (uint16_t i = 0; i < lua->flowvars; i++) {
+            VarNameStoreUnregister(lua->flowvar[i], VAR_TYPE_FLOW_VAR);
+        }
 
         DetectUnregisterThreadCtxFuncs(de_ctx, lua, "lua");
 
@@ -1281,7 +1278,10 @@ static int LuaMatchTest01(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_VAR);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_str.value_len != 1);
@@ -1398,7 +1398,10 @@ static int LuaMatchTest01a(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_VAR);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_str.value_len != 1);
@@ -1503,7 +1506,10 @@ static int LuaMatchTest02(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_VAR);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_str.value_len != 1);
@@ -1606,7 +1612,10 @@ static int LuaMatchTest02a(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_VAR);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_str.value_len != 1);
@@ -1709,7 +1718,10 @@ static int LuaMatchTest03(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_VAR);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_str.value_len != 1);
@@ -1811,7 +1823,10 @@ static int LuaMatchTest03a(void)
     SigMatchSignatures(&th_v, de_ctx, det_ctx, p2);
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_VAR);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_str.value_len != 1);
@@ -1925,7 +1940,10 @@ static int LuaMatchTest04(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_INT);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_int.value != 2);
@@ -2040,7 +2058,10 @@ static int LuaMatchTest04a(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_INT);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_int.value != 2);
@@ -2148,7 +2169,10 @@ static int LuaMatchTest05(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_INT);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_int.value != 2);
@@ -2256,7 +2280,10 @@ static int LuaMatchTest05a(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_INT);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_int.value != 2);
@@ -2369,7 +2396,10 @@ static int LuaMatchTest06(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_INT);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_int.value != 0);
@@ -2482,7 +2512,10 @@ static int LuaMatchTest06a(void)
 
     FAIL_IF_NOT(PacketAlertCheck(p2, 1));
 
-    FlowVar *fv = FlowVarGet(&f, 1);
+    uint32_t id = VarNameStoreLookupByName("cnt", VAR_TYPE_FLOW_INT);
+    FAIL_IF(id == 0);
+
+    FlowVar *fv = FlowVarGet(&f, id);
     FAIL_IF_NULL(fv);
 
     FAIL_IF(fv->data.fv_int.value != 0);

@@ -68,6 +68,18 @@ compress_whitespace
 
 Compresses all consecutive whitespace into a single space.
 
+to_lowercase
+------------
+
+Converts the buffer to lowercase and passes the value on.
+
+This example alerts if ``http.uri`` contains ``this text has been converted to lowercase``
+
+Example::
+
+    alert http any any -> any any (http.uri; to_lowercase; \
+        content:"this text has been converted to lowercase"; sid:1;)
+
 to_md5
 ------
 
@@ -78,6 +90,18 @@ Example::
 
     alert http any any -> any any (http_request_line; to_md5; \
         content:"|54 A9 7A 8A B0 9C 1B 81 37 25 22 14 51 D3 F9 97|"; sid:1;)
+
+to_uppercase
+------------
+
+Converts the buffer to uppercase and passes the value on.
+
+This example alerts if ``http.uri`` contains ``THIS TEXT HAS BEEN CONVERTED TO LOWERCASE``
+
+Example::
+
+    alert http any any -> any any (http.uri; to_uppercase; \
+        content:"THIS TEXT HAS BEEN CONVERTED TO UPPERCASE"; sid:1;)
 
 to_sha1
 ---------
@@ -134,3 +158,33 @@ Example::
 
     alert http any any -> any any (msg:"HTTP with xor"; http.uri; \
         xor:"0d0ac8ff"; content:"password="; sid:1;)
+
+header_lowercase
+----------------
+
+This transform is meant for HTTP/1 HTTP/2 header names normalization.
+It lowercases the header names, while keeping untouched the header values.
+
+The implementation uses a state machine :
+- it lowercases until it finds ``:```
+- it does not change until it finds a new line and switch back to first state
+
+This example alerts for both HTTP/1 and HTTP/2 with a authorization header
+Example::
+
+    alert http any any -> any any (msg:"HTTP authorization"; http.header_names; \
+        header_lowercase; content:"authorization:"; sid:1;)
+
+strip_pseudo_headers
+--------------------
+
+This transform is meant for HTTP/1 HTTP/2 header names normalization.
+It strips HTTP2 pseudo-headers (names and values).
+
+The implementation just strips every line beginning by ``:``.
+
+This example alerts for both HTTP/1 and HTTP/2 with only a user agent
+Example::
+
+    alert http any any -> any any (msg:"HTTP ua only"; http.header_names; \
+       bsize:16; content:"|0d 0a|User-Agent|0d 0a 0d 0a|"; nocase; sid:1;)

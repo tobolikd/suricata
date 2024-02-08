@@ -63,9 +63,9 @@ void DetectCipServiceRegister(void)
     sigmatch_table[DETECT_CIPSERVICE].RegisterTests
             = DetectCipServiceRegisterTests;
 #endif
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "cip", ALPROTO_ENIP, SIG_FLAG_TOSERVER, 0, DetectEngineInspectCIP, NULL);
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "cip", ALPROTO_ENIP, SIG_FLAG_TOCLIENT, 0, DetectEngineInspectCIP, NULL);
 
     g_cip_buffer_id = DetectBufferTypeGetByName("cip");
@@ -208,7 +208,6 @@ static int DetectCipServiceSetup(DetectEngineCtx *de_ctx, Signature *s,
     SCEnter();
 
     DetectCipServiceData *cipserviced = NULL;
-    SigMatch *sm = NULL;
 
     if (DetectSignatureSetAppProto(s, ALPROTO_ENIP) != 0)
         return -1;
@@ -217,21 +216,15 @@ static int DetectCipServiceSetup(DetectEngineCtx *de_ctx, Signature *s,
     if (cipserviced == NULL)
         goto error;
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_CIPSERVICE, (SigMatchCtx *)cipserviced,
+                g_cip_buffer_id) == NULL) {
         goto error;
-
-    sm->type = DETECT_CIPSERVICE;
-    sm->ctx = (void *) cipserviced;
-
-    SigMatchAppendSMToList(s, sm, g_cip_buffer_id);
+    }
     SCReturnInt(0);
 
 error:
     if (cipserviced != NULL)
         DetectCipServiceFree(de_ctx, cipserviced);
-    if (sm != NULL)
-        SCFree(sm);
     SCReturnInt(-1);
 }
 
@@ -316,9 +309,9 @@ void DetectEnipCommandRegister(void)
     sigmatch_table[DETECT_ENIPCOMMAND].RegisterTests
             = DetectEnipCommandRegisterTests;
 #endif
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "enip", ALPROTO_ENIP, SIG_FLAG_TOSERVER, 0, DetectEngineInspectENIP, NULL);
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "enip", ALPROTO_ENIP, SIG_FLAG_TOCLIENT, 0, DetectEngineInspectENIP, NULL);
 
     g_enip_buffer_id = DetectBufferTypeGetByName("enip");
@@ -378,7 +371,6 @@ static int DetectEnipCommandSetup(DetectEngineCtx *de_ctx, Signature *s,
         const char *rulestr)
 {
     DetectEnipCommandData *enipcmdd = NULL;
-    SigMatch *sm = NULL;
 
     if (DetectSignatureSetAppProto(s, ALPROTO_ENIP) != 0)
         return -1;
@@ -387,21 +379,15 @@ static int DetectEnipCommandSetup(DetectEngineCtx *de_ctx, Signature *s,
     if (enipcmdd == NULL)
         goto error;
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(
+                de_ctx, s, DETECT_ENIPCOMMAND, (SigMatchCtx *)enipcmdd, g_enip_buffer_id) == NULL) {
         goto error;
-
-    sm->type = DETECT_ENIPCOMMAND;
-    sm->ctx = (void *) enipcmdd;
-
-    SigMatchAppendSMToList(s, sm, g_enip_buffer_id);
+    }
     SCReturnInt(0);
 
 error:
     if (enipcmdd != NULL)
         DetectEnipCommandFree(de_ctx, enipcmdd);
-    if (sm != NULL)
-        SCFree(sm);
     SCReturnInt(-1);
 }
 

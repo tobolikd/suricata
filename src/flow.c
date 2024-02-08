@@ -536,12 +536,10 @@ void FlowHandlePacket(ThreadVars *tv, FlowLookupStruct *fls, Packet *p)
      * a new flow if necessary. If we get NULL, we're out of flow memory.
      * The returned flow is locked. */
     Flow *f = FlowGetFlowFromHash(tv, fls, p, &p->flow);
-    if (f == NULL)
-        return;
-
-    /* set the flow in the packet */
-    p->flags |= PKT_HAS_FLOW;
-    return;
+    if (f != NULL) {
+        /* set the flow in the packet */
+        p->flags |= PKT_HAS_FLOW;
+    }
 }
 
 /** \brief initialize the configuration
@@ -606,10 +604,11 @@ void FlowInitConfig(bool quiet)
             FatalError("Invalid value for flow.hash-size: NULL");
         }
 
-        if (StringParseUint32(&configval, 10, strlen(conf_val), conf_val) > 0 || configval == 0) {
+        if (StringParseUint32(&configval, 10, strlen(conf_val), conf_val) && configval != 0) {
             flow_config.hash_size = configval;
         } else {
-            FatalError("Invalid value for flow.hash-size");
+            FatalError("Invalid value for flow.hash-size. Must be a numeric value in the range "
+                       "1-4294967295");
         }
     }
     if ((ConfGet("flow.prealloc", &conf_val)) == 1)

@@ -297,36 +297,23 @@ static void PreBmGsNocase(const uint8_t *x, uint16_t m, uint16_t *bmGs)
  *
  * \retval ptr to start of the match; NULL if no match
  */
-uint8_t *BoyerMoore(const uint8_t *x, uint16_t m, const uint8_t *y, uint32_t n, BmCtx *bm_ctx)
+uint8_t *BoyerMoore(
+        const uint8_t *x, const uint16_t m, const uint8_t *y, const uint32_t n, const BmCtx *bm_ctx)
 {
-    uint16_t *bmGs = bm_ctx->bmGs;
-    uint16_t *bmBc = bm_ctx->bmBc;
+    const uint16_t *bmGs = bm_ctx->bmGs;
+    const uint16_t *bmBc = bm_ctx->bmBc;
 
     int i, j, m1, m2;
-    int32_t int_n;
-#if 0
-    printf("\nBad:\n");
-    for (i=0;i<ALPHABET_SIZE;i++)
-        printf("%c,%d ", i, bmBc[i]);
-
-    printf("\ngood:\n");
-    for (i=0;i<m;i++)
-        printf("%c, %d ", x[i],bmBc[i]);
-    printf("\n");
-#endif
     // force casting to int32_t (if possible)
-    int_n = unlikely(n > INT32_MAX) ? INT32_MAX : n;
+    const int32_t int_n = unlikely(n > INT32_MAX) ? INT32_MAX : n;
     j = 0;
     while (j <= int_n - m ) {
         for (i = m - 1; i >= 0 && x[i] == y[i + j]; --i);
 
         if (i < 0) {
             return (uint8_t *)(y + j);
-            //j += bmGs[0];
         } else {
-//          printf("%c", y[i+j]);
-            j += (m1 = bmGs[i]) > (m2 = bmBc[y[i + j]] - m + 1 + i)? m1: m2;
-//          printf("%d, %d\n", m1, m2);
+            j += (m1 = bmGs[i]) > (m2 = bmBc[y[i + j]] - m + 1 + i) ? m1 : m2;
         }
     }
     return NULL;
@@ -348,24 +335,14 @@ uint8_t *BoyerMoore(const uint8_t *x, uint16_t m, const uint8_t *y, uint32_t n, 
  *
  * \retval ptr to start of the match; NULL if no match
  */
-uint8_t *BoyerMooreNocase(const uint8_t *x, uint16_t m, const uint8_t *y, uint32_t n, BmCtx *bm_ctx)
+uint8_t *BoyerMooreNocase(
+        const uint8_t *x, const uint16_t m, const uint8_t *y, const uint32_t n, const BmCtx *bm_ctx)
 {
-    uint16_t *bmGs = bm_ctx->bmGs;
-    uint16_t *bmBc = bm_ctx->bmBc;
+    const uint16_t *bmGs = bm_ctx->bmGs;
+    const uint16_t *bmBc = bm_ctx->bmBc;
     int i, j, m1, m2;
-    int32_t int_n;
-#if 0
-    printf("\nBad:\n");
-    for (i=0;i<ALPHABET_SIZE;i++)
-        printf("%c,%d ", i, bmBc[i]);
-
-    printf("\ngood:\n");
-    for (i=0;i<m;i++)
-        printf("%c, %d ", x[i],bmBc[i]);
-    printf("\n");
-#endif
     // force casting to int32_t (if possible)
-    int_n = unlikely(n > INT32_MAX) ? INT32_MAX : n;
+    const int32_t int_n = unlikely(n > INT32_MAX) ? INT32_MAX : n;
     j = 0;
     while (j <= int_n - m ) {
          /* x is stored in lowercase. */
@@ -374,8 +351,7 @@ uint8_t *BoyerMooreNocase(const uint8_t *x, uint16_t m, const uint8_t *y, uint32
         if (i < 0) {
             return (uint8_t *)(y + j);
         } else {
-            j += (m1 = bmGs[i]) > (m2 = bmBc[y[i + j]] - m + 1 + i)?
-                m1: m2;
+            j += (m1 = bmGs[i]) > (m2 = bmBc[y[i + j]] - m + 1 + i) ? m1 : m2;
         }
     }
     return NULL;
@@ -391,21 +367,19 @@ typedef struct SpmBmCtx_ {
 static SpmCtx *BMInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
                          SpmGlobalThreadCtx *global_thread_ctx)
 {
-    SpmCtx *ctx = SCMalloc(sizeof(SpmCtx));
+    SpmCtx *ctx = SCCalloc(1, sizeof(SpmCtx));
     if (ctx == NULL) {
         SCLogDebug("Unable to alloc SpmCtx.");
         return NULL;
     }
-    memset(ctx, 0, sizeof(*ctx));
     ctx->matcher = SPM_BM;
 
-    SpmBmCtx *sctx = SCMalloc(sizeof(SpmBmCtx));
+    SpmBmCtx *sctx = SCCalloc(1, sizeof(SpmBmCtx));
     if (sctx == NULL) {
         SCLogDebug("Unable to alloc SpmBmCtx.");
         SCFree(ctx);
         return NULL;
     }
-    memset(sctx, 0, sizeof(*sctx));
 
     sctx->needle = SCMalloc(needle_len);
     if (sctx->needle == NULL) {
@@ -463,12 +437,11 @@ static uint8_t *BMScan(const SpmCtx *ctx, SpmThreadCtx *thread_ctx,
 
 static SpmGlobalThreadCtx *BMInitGlobalThreadCtx(void)
 {
-    SpmGlobalThreadCtx *global_thread_ctx = SCMalloc(sizeof(SpmGlobalThreadCtx));
+    SpmGlobalThreadCtx *global_thread_ctx = SCCalloc(1, sizeof(SpmGlobalThreadCtx));
     if (global_thread_ctx == NULL) {
         SCLogDebug("Unable to alloc SpmThreadCtx.");
         return NULL;
     }
-    memset(global_thread_ctx, 0, sizeof(*global_thread_ctx));
     global_thread_ctx->matcher = SPM_BM;
     return global_thread_ctx;
 }
@@ -490,12 +463,11 @@ static void BMDestroyThreadCtx(SpmThreadCtx *thread_ctx)
 }
 
 static SpmThreadCtx *BMMakeThreadCtx(const SpmGlobalThreadCtx *global_thread_ctx) {
-    SpmThreadCtx *thread_ctx = SCMalloc(sizeof(SpmThreadCtx));
+    SpmThreadCtx *thread_ctx = SCCalloc(1, sizeof(SpmThreadCtx));
     if (thread_ctx == NULL) {
         SCLogDebug("Unable to alloc SpmThreadCtx.");
         return NULL;
     }
-    memset(thread_ctx, 0, sizeof(*thread_ctx));
     thread_ctx->matcher = SPM_BM;
     return thread_ctx;
 }

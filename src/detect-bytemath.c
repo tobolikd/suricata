@@ -29,20 +29,22 @@
 #include "threads.h"
 #include "decode.h"
 
+#include "app-layer-parser.h"
+#include "app-layer-protos.h"
+
 #include "detect.h"
 #include "detect-parse.h"
 #include "detect-engine.h"
 #include "detect-engine-mpm.h"
 #include "detect-engine-state.h"
 #include "detect-engine-build.h"
+
+#include "rust-bindings.h"
+
 #include "detect-content.h"
 #include "detect-pcre.h"
 #include "detect-byte.h"
 #include "detect-bytemath.h"
-
-#include "app-layer-parser.h"
-#include "app-layer-protos.h"
-#include "rust-bindings.h"
 
 #include "flow.h"
 #include "flow-var.h"
@@ -82,11 +84,10 @@ static inline bool DetectByteMathValidateNbytesOnly(const DetectByteMathData *da
            (((data->flags & DETECT_BYTEMATH_FLAG_STRING) && nbytes <= 10) || (nbytes <= 4));
 }
 
-int DetectByteMathDoMatch(DetectEngineThreadCtx *det_ctx, const SigMatchData *smd,
-        const Signature *s, const uint8_t *payload, uint16_t payload_len, uint8_t nbytes,
+int DetectByteMathDoMatch(DetectEngineThreadCtx *det_ctx, const DetectByteMathData *data,
+        const Signature *s, const uint8_t *payload, const uint32_t payload_len, uint8_t nbytes,
         uint64_t rvalue, uint64_t *value, uint8_t endian)
 {
-    const DetectByteMathData *data = (DetectByteMathData *)smd->ctx;
     if (payload_len == 0) {
         return 0;
     }
@@ -279,7 +280,6 @@ static DetectByteMathData *DetectByteMathParse(
  */
 static int DetectByteMathSetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
 {
-    SigMatch *sm = NULL;
     SigMatch *prev_pm = NULL;
     DetectByteMathData *data;
     char *rvalue = NULL;
@@ -325,7 +325,6 @@ static int DetectByteMathSetup(DetectEngineCtx *de_ctx, Signature *s, const char
 
         if (DetectSignatureSetAppProto(s, ALPROTO_DCERPC) < 0)
             goto error;
-        s->flags |= SIG_FLAG_APPLAYER;
 
     } else if (data->flags & DETECT_BYTEMATH_FLAG_RELATIVE) {
         prev_pm = DetectGetLastSMFromLists(s, DETECT_CONTENT, DETECT_PCRE,
@@ -338,8 +337,6 @@ static int DetectByteMathSetup(DetectEngineCtx *de_ctx, Signature *s, const char
             sm_list = SigMatchListSMBelongsTo(s, prev_pm);
             if (sm_list < 0)
                 goto error;
-            if (sm_list != DETECT_SM_LIST_PMATCH)
-                s->flags |= SIG_FLAG_APPLAYER;
         }
 
     } else {
@@ -393,12 +390,9 @@ static int DetectByteMathSetup(DetectEngineCtx *de_ctx, Signature *s, const char
         de_ctx->byte_extract_max_local_id = data->local_id;
     }
 
-    sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_BYTEMATH, (SigMatchCtx *)data, sm_list) == NULL) {
         goto error;
-    sm->type = DETECT_BYTEMATH;
-    sm->ctx = (void *)data;
-    SigMatchAppendSMToList(s, sm, sm_list);
+    }
 
     if (!(data->flags & DETECT_BYTEMATH_FLAG_RELATIVE))
         goto okay;

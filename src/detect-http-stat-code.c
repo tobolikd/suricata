@@ -98,16 +98,16 @@ void DetectHttpStatCodeRegister (void)
     sigmatch_table[DETECT_HTTP_STAT_CODE].Setup = DetectHttpStatCodeSetupSticky;
     sigmatch_table[DETECT_HTTP_STAT_CODE].flags |= SIGMATCH_NOOPT|SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2("http_stat_code", ALPROTO_HTTP1, SIG_FLAG_TOCLIENT,
+    DetectAppLayerInspectEngineRegister("http_stat_code", ALPROTO_HTTP1, SIG_FLAG_TOCLIENT,
             HTP_RESPONSE_LINE, DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2("http_stat_code", SIG_FLAG_TOCLIENT, 4, PrefilterGenericMpmRegister,
+    DetectAppLayerMpmRegister("http_stat_code", SIG_FLAG_TOCLIENT, 4, PrefilterGenericMpmRegister,
             GetData, ALPROTO_HTTP1, HTP_RESPONSE_LINE);
 
-    DetectAppLayerInspectEngineRegister2("http_stat_code", ALPROTO_HTTP2, SIG_FLAG_TOCLIENT,
+    DetectAppLayerInspectEngineRegister("http_stat_code", ALPROTO_HTTP2, SIG_FLAG_TOCLIENT,
             HTTP2StateDataServer, DetectEngineInspectBufferGeneric, GetData2);
 
-    DetectAppLayerMpmRegister2("http_stat_code", SIG_FLAG_TOCLIENT, 4, PrefilterGenericMpmRegister,
+    DetectAppLayerMpmRegister("http_stat_code", SIG_FLAG_TOCLIENT, 4, PrefilterGenericMpmRegister,
             GetData2, ALPROTO_HTTP2, HTTP2StateDataServer);
 
     DetectBufferTypeSetDescriptionByName("http_stat_code",

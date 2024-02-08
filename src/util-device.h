@@ -23,6 +23,7 @@
 #endif /* HAVE_DPDK */
 
 #include "queue.h"
+#include "util-storage.h"
 
 #define OFFLOAD_FLAG_SG     (1<<0)
 #define OFFLOAD_FLAG_TSO    (1<<1)
@@ -49,6 +50,7 @@ typedef struct {
 typedef struct LiveDevice_ {
     char *dev;  /**< the device (e.g. "eth0") */
     char dev_short[MAX_DEVNAME + 1];
+    int mtu; /* MTU of the device */
     bool tenant_id_set;
 
     uint16_t id;
@@ -65,6 +67,8 @@ typedef struct LiveDevice_ {
     // DPDK resources that needs to be cleaned after workers are stopped and devices closed
     DPDKDeviceResources dpdk_vars;
 #endif
+    /** storage handle as a flex array member */
+    Storage storage[];
 } LiveDevice;
 
 typedef struct LiveDeviceName_ {

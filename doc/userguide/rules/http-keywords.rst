@@ -44,6 +44,7 @@ http.accept_enc                http_accept_enc (*)      Request
 http.referer                   http_referer (*)         Request
 http.connection                http_connection (*)      Both
 file.data                      file_data (*)            Both
+file.name                      filename (*)             Request
 http.content_type              http_content_type (*)    Both
 http.content_len               http_content_len (*)     Both
 http.start                     http_start (*)           Both
@@ -670,7 +671,6 @@ Example::
     alert http any any -> any any (flow:to_client; \
             http.location; content:"http://www.google.com"; sid:1;)
 
-
 http.host and http.host.raw
 ---------------------------
 
@@ -838,9 +838,21 @@ Notes
    than 1k, 'content:!"<html"; depth:1024;' can only match if the
    pattern '<html' is absent from the first inspected chunk.
 
--  ``file.data`` can also be used with SMTP
+-  Refer to :doc:`file-keywords` for additional information.
 
 Multiple Buffer Matching
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``file.data`` supports multiple buffer matching, see :doc:`multi-buffer-matching`.
+
+file.name
+---------
+
+The ``file.name`` keyword can be used at the HTTP application level.
+
+Example::
+
+  alert http any any -> any any (msg:"http layer file.name keyword usage"; \
+  file.name; content:"picture.jpg"; classtype:bad-unknown; sid:1; rev:1;)
+
+For additional information on the ``file.name`` keyword, see :doc:`file-keywords`.

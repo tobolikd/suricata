@@ -363,8 +363,12 @@ static bool SCClassConfParseFile(DetectEngineCtx *de_ctx, FILE *fd)
     }
 
 #ifdef UNITTESTS
-    SCLogInfo("Added \"%d\" classification types from the classification file",
-              de_ctx->class_conf_ht->count);
+    if (de_ctx != NULL && strlen(de_ctx->config_prefix) > 0)
+        SCLogInfo("tenant id %d: Added \"%d\" classification types from the classification file",
+                de_ctx->tenant_id, de_ctx->class_conf_ht->count);
+    else
+        SCLogInfo("Added \"%d\" classification types from the classification file",
+                de_ctx->class_conf_ht->count);
 #endif
 
     return errors == 0;
@@ -392,9 +396,8 @@ static SCClassConfClasstype *SCClassConfAllocClasstype(uint16_t classtype_id,
     if (classtype == NULL)
         return NULL;
 
-    if ( (ct = SCMalloc(sizeof(SCClassConfClasstype))) == NULL)
+    if ((ct = SCCalloc(1, sizeof(SCClassConfClasstype))) == NULL)
         return NULL;
-    memset(ct, 0, sizeof(SCClassConfClasstype));
 
     if ((ct->classtype = SCClassConfStringToLowercase(classtype)) == NULL) {
         SCClassConfDeAllocClasstype(ct);

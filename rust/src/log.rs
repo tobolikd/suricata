@@ -15,6 +15,8 @@
  * 02110-1301, USA.
  */
 
+//! Logging utility module.
+
 use std;
 use std::ffi::CString;
 use std::path::Path;
@@ -27,7 +29,7 @@ pub enum Level {
     NotSet = -1,
     _None = 0,
     Error,
-    _Warning,
+    Warning,
     Notice,
     Info,
     _Perf,
@@ -110,6 +112,13 @@ macro_rules!do_log {
 macro_rules!SCLogError {
     ($($arg:tt)*) => {
         $crate::do_log!($crate::log::Level::Error, $($arg)*);
+    };
+}
+
+#[macro_export]
+macro_rules!SCLogWarning {
+    ($($arg:tt)*) => {
+        $crate::do_log!($crate::log::Level::Warning, $($arg)*);
     };
 }
 

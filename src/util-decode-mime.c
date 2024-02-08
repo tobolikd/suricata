@@ -266,11 +266,10 @@ void MimeDecFreeUrl(MimeDecUrl *url)
  */
 MimeDecField * MimeDecAddField(MimeDecEntity *entity)
 {
-    MimeDecField *node = SCMalloc(sizeof(MimeDecField));
+    MimeDecField *node = SCCalloc(1, sizeof(MimeDecField));
     if (unlikely(node == NULL)) {
         return NULL;
     }
-    memset(node, 0x00, sizeof(MimeDecField));
 
     /* If list is empty, then set as head of list */
     if (entity->field_list == NULL) {
@@ -351,11 +350,10 @@ MimeDecField * MimeDecFindField(const MimeDecEntity *entity, const char *name) {
  */
 static MimeDecUrl * MimeDecAddUrl(MimeDecEntity *entity, uint8_t *url, uint32_t url_len, uint8_t flags)
 {
-    MimeDecUrl *node = SCMalloc(sizeof(MimeDecUrl));
+    MimeDecUrl *node = SCCalloc(1, sizeof(MimeDecUrl));
     if (unlikely(node == NULL)) {
         return NULL;
     }
-    memset(node, 0x00, sizeof(MimeDecUrl));
 
     node->url = url;
     node->url_len = url_len;
@@ -384,22 +382,19 @@ static MimeDecUrl * MimeDecAddUrl(MimeDecEntity *entity, uint8_t *url, uint32_t 
  */
 MimeDecEntity * MimeDecAddEntity(MimeDecEntity *parent)
 {
-    MimeDecEntity *curr, *node = SCMalloc(sizeof(MimeDecEntity));
+    MimeDecEntity *node = SCCalloc(1, sizeof(MimeDecEntity));
     if (unlikely(node == NULL)) {
         return NULL;
     }
-    memset(node, 0x00, sizeof(MimeDecEntity));
 
     /* If parent is NULL then just return the new pointer */
     if (parent != NULL) {
         if (parent->child == NULL) {
             parent->child = node;
+            parent->last_child = node;
         } else {
-            curr = parent->child;
-            while (curr->next != NULL) {
-                curr = curr->next;
-            }
-            curr->next = node;
+            parent->last_child->next = node;
+            parent->last_child = node;
         }
     }
 
@@ -466,7 +461,7 @@ static MimeDecStackNode * PushStack(MimeDecStack *stack)
     /* Attempt to pull from free nodes list */
     MimeDecStackNode *node = stack->free_nodes;
     if (node == NULL) {
-        node = SCMalloc(sizeof(MimeDecStackNode));
+        node = SCCalloc(1, sizeof(MimeDecStackNode));
         if (unlikely(node == NULL)) {
             return NULL;
         }
@@ -474,8 +469,8 @@ static MimeDecStackNode * PushStack(MimeDecStack *stack)
         /* Move free nodes pointer over */
         stack->free_nodes = stack->free_nodes->next;
         stack->free_nodes_cnt--;
+        memset(node, 0x00, sizeof(MimeDecStackNode));
     }
-    memset(node, 0x00, sizeof(MimeDecStackNode));
 
     /* Push to top of stack */
     node->next = stack->top;
@@ -563,11 +558,10 @@ static void FreeMimeDecStack(MimeDecStack *stack)
  */
 static DataValue * AddDataValue(DataValue *dv)
 {
-    DataValue *curr, *node = SCMalloc(sizeof(DataValue));
+    DataValue *curr, *node = SCCalloc(1, sizeof(DataValue));
     if (unlikely(node == NULL)) {
         return NULL;
     }
-    memset(node, 0x00, sizeof(DataValue));
 
     if (dv != NULL) {
         curr = dv;
@@ -1375,16 +1369,21 @@ static int ProcessBase64BodyLine(const uint8_t *buf, uint32_t len,
          * size. We strip of spaces this while storing it in bvremain */
         if (consumed_bytes == 0 && leftover_bytes > B64_BLOCK) {
             DEBUG_VALIDATE_BUG_ON(state->bvr_len != 0);
-            return ProcessBase64BodyLineCopyRemainder(buf, len, offset, state);
+            ret = ProcessBase64BodyLineCopyRemainder(buf, len, offset, state);
+            break;
         } else if (leftover_bytes > 0 && leftover_bytes <= B64_BLOCK) {
             /* If remaining is 4 by this time, we encountered spaces during processing */
             DEBUG_VALIDATE_BUG_ON(state->bvr_len != 0);
-            return ProcessBase64BodyLineCopyRemainder(buf, len, offset + consumed_bytes, state);
+            ret = ProcessBase64BodyLineCopyRemainder(buf, len, offset + consumed_bytes, state);
+            break;
         }
 
         /* Update counts */
         remaining = leftover_bytes;
         offset += consumed_bytes;
+    }
+    if (ret == MIME_DEC_OK && state->data_chunk_len > 0) {
+        ret = ProcessDecodedDataChunk(state->data_chunk, state->data_chunk_len, state);
     }
     return ret;
 }
@@ -1765,6 +1764,12 @@ static int FindMimeHeader(const uint8_t *buf, uint32_t blen,
         /* Flag beginning of body */
         state->body_begin = 1;
         state->body_end = 0;
+
+        // Begin the body md5 computation if config asks so
+        if (MimeDecGetConfig()->body_md5 && state->md5_ctx == NULL) {
+            state->md5_ctx = SCMd5New();
+            SCMd5Update(state->md5_ctx, buf, blen + state->current_line_delimiter_len);
+        }
 
         ret = ProcessBodyLine(buf, blen, state);
         if (ret != MIME_DEC_OK) {
@@ -2403,26 +2408,23 @@ MimeDecParseState * MimeDecInitParser(void *data,
     MimeDecParseState *state;
     MimeDecEntity *mimeMsg;
 
-    state = SCMalloc(sizeof(MimeDecParseState));
+    state = SCCalloc(1, sizeof(MimeDecParseState));
     if (unlikely(state == NULL)) {
         return NULL;
     }
-    memset(state, 0x00, sizeof(MimeDecParseState));
 
-    state->stack = SCMalloc(sizeof(MimeDecStack));
+    state->stack = SCCalloc(1, sizeof(MimeDecStack));
     if (unlikely(state->stack == NULL)) {
         SCFree(state);
         return NULL;
     }
-    memset(state->stack, 0x00, sizeof(MimeDecStack));
 
-    mimeMsg = SCMalloc(sizeof(MimeDecEntity));
+    mimeMsg = SCCalloc(1, sizeof(MimeDecEntity));
     if (unlikely(mimeMsg == NULL)) {
         SCFree(state->stack);
         SCFree(state);
         return NULL;
     }
-    memset(mimeMsg, 0x00, sizeof(MimeDecEntity));
     mimeMsg->ctnt_flags |= CTNT_IS_MSG;
 
     /* Init state */

@@ -25,6 +25,22 @@
 #ifndef __UTIL_PATH_H__
 #define __UTIL_PATH_H__
 
+#ifdef OS_WIN32
+typedef struct _stat SCStat;
+#define SCFstatFn(fd, statbuf)      _fstat((fd), (statbuf))
+#define SCStatFn(pathname, statbuf) _stat((pathname), (statbuf))
+#else
+typedef struct stat SCStat;
+#define SCFstatFn(fd, statbuf)      fstat((fd), (statbuf))
+#define SCStatFn(pathname, statbuf) stat((pathname), (statbuf))
+#endif
+
+#if defined OS_WIN32 || defined __CYGWIN__
+#define PATH_SEPARATOR_SIZE 2
+#else
+#define PATH_SEPARATOR_SIZE 1
+#endif
+
 #ifndef HAVE_NON_POSIX_MKDIR
     #define SCMkDir(a, b) mkdir(a, b)
 #else
@@ -33,7 +49,9 @@
 
 int PathIsAbsolute(const char *);
 int PathIsRelative(const char *);
-TmEcode PathJoin (char *out_buf, uint16_t buf_len, const char *const dir, const char *const fname);
+int PathMerge(char *out_buf, size_t buf_size, const char *const dir, const char *const fname);
+char *PathMergeAlloc(const char *const dir, const char *const fname);
+int PathJoin(char *out_buf, size_t buf_len, const char *const dir, const char *const fname);
 int SCDefaultMkDir(const char *path);
 int SCCreateDirectoryTree(const char *path, const bool final);
 bool SCPathExists(const char *path);

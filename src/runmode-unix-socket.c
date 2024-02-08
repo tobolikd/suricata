@@ -28,6 +28,7 @@
 #include "util-cpu.h"
 #include "util-affinity.h"
 #include "util-var-name.h"
+#include "util-path.h"
 #include "unix-manager.h"
 
 #include "detect-engine.h"
@@ -271,12 +272,11 @@ static TmEcode UnixListAddFile(PcapCommand *this, const char *filename, const ch
     PcapFiles *cfile = NULL;
     if (filename == NULL || this == NULL)
         return TM_ECODE_FAILED;
-    cfile = SCMalloc(sizeof(PcapFiles));
+    cfile = SCCalloc(1, sizeof(PcapFiles));
     if (unlikely(cfile == NULL)) {
         SCLogError("Unable to allocate new file");
         return TM_ECODE_FAILED;
     }
-    memset(cfile, 0, sizeof(PcapFiles));
 
     cfile->filename = SCStrdup(filename);
     if (unlikely(cfile->filename == NULL)) {
@@ -323,11 +323,7 @@ static TmEcode UnixSocketAddPcapFileImpl(json_t *cmd, json_t* answer, void *data
     bool should_delete = false;
     time_t delay = 30;
     time_t poll_interval = 5;
-#ifdef OS_WIN32
-    struct _stat st;
-#else
-    struct stat st;
-#endif /* OS_WIN32 */
+    SCStat st;
 
     json_t *jarg = json_object_get(cmd, "filename");
     if (!json_is_string(jarg)) {
@@ -337,11 +333,7 @@ static TmEcode UnixSocketAddPcapFileImpl(json_t *cmd, json_t* answer, void *data
         return TM_ECODE_FAILED;
     }
     filename = json_string_value(jarg);
-#ifdef OS_WIN32
-    if (_stat(filename, &st) != 0) {
-#else
-    if (stat(filename, &st) != 0) {
-#endif /* OS_WIN32 */
+    if (SCStatFn(filename, &st) != 0) {
         json_object_set_new(answer, "message",
                             json_string("filename does not exist"));
         return TM_ECODE_FAILED;
@@ -365,11 +357,7 @@ static TmEcode UnixSocketAddPcapFileImpl(json_t *cmd, json_t* answer, void *data
         return TM_ECODE_FAILED;
     }
 
-#ifdef OS_WIN32
-    if (_stat(output_dir, &st) != 0) {
-#else
-    if (stat(output_dir, &st) != 0) {
-#endif /* OS_WIN32 */
+    if (SCStatFn(output_dir, &st) != 0) {
         json_object_set_new(answer, "message",
                             json_string("output-dir does not exist"));
         return TM_ECODE_FAILED;
@@ -1016,11 +1004,7 @@ TmEcode UnixSocketUnregisterTenantHandler(json_t *cmd, json_t* answer, void *dat
 TmEcode UnixSocketRegisterTenant(json_t *cmd, json_t* answer, void *data)
 {
     const char *filename;
-#ifdef OS_WIN32
-    struct _stat st;
-#else
-    struct stat st;
-#endif /* OS_WIN32 */
+    SCStat st;
 
     if (!(DetectEngineMultiTenantEnabled())) {
         SCLogInfo("error: multi-tenant support not enabled");
@@ -1043,11 +1027,7 @@ TmEcode UnixSocketRegisterTenant(json_t *cmd, json_t* answer, void *data)
         return TM_ECODE_FAILED;
     }
     filename = json_string_value(jarg);
-#ifdef OS_WIN32
-    if (_stat(filename, &st) != 0) {
-#else
-    if (stat(filename, &st) != 0) {
-#endif /* OS_WIN32 */
+    if (SCStatFn(filename, &st) != 0) {
         json_object_set_new(answer, "message", json_string("file does not exist"));
         return TM_ECODE_FAILED;
     }
@@ -1091,12 +1071,8 @@ static int reload_cnt = 1;
  */
 TmEcode UnixSocketReloadTenant(json_t *cmd, json_t* answer, void *data)
 {
-    const char *filename;
-#ifdef OS_WIN32
-    struct _stat st;
-#else
-    struct stat st;
-#endif /* OS_WIN32 */
+    const char *filename = NULL;
+    SCStat st;
 
     if (!(DetectEngineMultiTenantEnabled())) {
         SCLogInfo("error: multi-tenant support not enabled");
@@ -1114,30 +1090,19 @@ TmEcode UnixSocketReloadTenant(json_t *cmd, json_t* answer, void *data)
 
     /* 2 get tenant yaml */
     jarg = json_object_get(cmd, "filename");
-    if (!json_is_string(jarg)) {
-        json_object_set_new(answer, "message", json_string("command is not a string"));
-        return TM_ECODE_FAILED;
-    }
-    filename = json_string_value(jarg);
-#ifdef OS_WIN32
-    if (_stat(filename, &st) != 0) {
-#else
-    if (stat(filename, &st) != 0) {
-#endif /* OS_WIN32 */
-        json_object_set_new(answer, "message", json_string("file does not exist"));
-        return TM_ECODE_FAILED;
+    if (jarg) {
+        if (!json_is_string(jarg)) {
+            json_object_set_new(answer, "message", json_string("command is not a string"));
+            return TM_ECODE_FAILED;
+        }
+        filename = json_string_value(jarg);
+        if (SCStatFn(filename, &st) != 0) {
+            json_object_set_new(answer, "message", json_string("file does not exist"));
+            return TM_ECODE_FAILED;
+        }
     }
 
     SCLogDebug("reload-tenant: %d %s", tenant_id, filename);
-
-    char prefix[64];
-    snprintf(prefix, sizeof(prefix), "multi-detect.%d.reload.%d", tenant_id, reload_cnt);
-    SCLogInfo("prefix %s", prefix);
-
-    if (ConfYamlLoadFileWithPrefix(filename, prefix) != 0) {
-        json_object_set_new(answer, "message", json_string("failed to load yaml"));
-        return TM_ECODE_FAILED;
-    }
 
     /* 3 load into the system */
     if (DetectEngineReloadTenantBlocking(tenant_id, filename, reload_cnt) != 0) {
@@ -1155,6 +1120,41 @@ TmEcode UnixSocketReloadTenant(json_t *cmd, json_t* answer, void *data)
     }
 
     json_object_set_new(answer, "message", json_string("reloading tenant succeeded"));
+    return TM_ECODE_OK;
+}
+
+/**
+ * \brief Command to reload all tenants
+ *
+ * \param cmd the content of command Arguments as a json_t object
+ * \param answer the json_t object that has to be used to answer
+ * \param data pointer to data defining the context here a PcapCommand::
+ */
+TmEcode UnixSocketReloadTenants(json_t *cmd, json_t *answer, void *data)
+{
+    if (!(DetectEngineMultiTenantEnabled())) {
+        SCLogInfo("error: multi-tenant support not enabled");
+        json_object_set_new(answer, "message", json_string("multi-tenant support not enabled"));
+        return TM_ECODE_FAILED;
+    }
+
+    if (DetectEngineReloadTenantsBlocking(reload_cnt) != 0) {
+        json_object_set_new(answer, "message", json_string("reload tenants failed"));
+        return TM_ECODE_FAILED;
+    }
+
+    reload_cnt++;
+
+    /*  apply to the running system */
+    if (DetectEngineMTApply() < 0) {
+        json_object_set_new(answer, "message", json_string("couldn't apply settings"));
+        // TODO cleanup
+        return TM_ECODE_FAILED;
+    }
+
+    SCLogNotice("reload-tenants complete");
+
+    json_object_set_new(answer, "message", json_string("reloading tenants succeeded"));
     return TM_ECODE_OK;
 }
 

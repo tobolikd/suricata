@@ -103,13 +103,11 @@ void DetectSipStatMsgRegister (void)
     sigmatch_table[DETECT_AL_SIP_STAT_MSG].Setup = DetectSipStatMsgSetup;
     sigmatch_table[DETECT_AL_SIP_STAT_MSG].flags |= SIGMATCH_NOOPT;
 
-    DetectAppLayerInspectEngineRegister2(BUFFER_NAME, ALPROTO_SIP,
-            SIG_FLAG_TOCLIENT, 1,
+    DetectAppLayerInspectEngineRegister(BUFFER_NAME, ALPROTO_SIP, SIG_FLAG_TOCLIENT, 1,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOCLIENT, 3,
-            PrefilterGenericMpmRegister, GetData, ALPROTO_SIP,
-            1);
+    DetectAppLayerMpmRegister(BUFFER_NAME, SIG_FLAG_TOCLIENT, 3, PrefilterGenericMpmRegister,
+            GetData, ALPROTO_SIP, 1);
 
     DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);
 

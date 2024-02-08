@@ -15,7 +15,7 @@
  * 02110-1301, USA.
  */
 
-//! Parser registration functions and common interface
+//! Parser registration functions and common interface module.
 
 use std;
 use crate::core::{self,DetectEngineState,Flow,AppLayerEventType,AppProto,Direction};
@@ -44,7 +44,7 @@ impl StreamSlice {
     #[cfg(test)]
     pub fn from_slice(slice: &[u8], flags: u8, offset: u64) -> Self {
         Self {
-            input: slice.as_ptr() as *const u8,
+            input: slice.as_ptr(),
             input_len: slice.len() as u32,
             flags,
             offset

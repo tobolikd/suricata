@@ -693,11 +693,11 @@ static AppLayerProtoDetectProbingParserElement *AppLayerProtoDetectProbingParser
 {
     SCEnter();
 
-    AppLayerProtoDetectProbingParserElement *p = SCMalloc(sizeof(AppLayerProtoDetectProbingParserElement));
+    AppLayerProtoDetectProbingParserElement *p =
+            SCCalloc(1, sizeof(AppLayerProtoDetectProbingParserElement));
     if (unlikely(p == NULL)) {
         exit(EXIT_FAILURE);
     }
-    memset(p, 0, sizeof(AppLayerProtoDetectProbingParserElement));
 
     SCReturnPtr(p, "AppLayerProtoDetectProbingParserElement");
 }
@@ -714,11 +714,11 @@ static AppLayerProtoDetectProbingParserPort *AppLayerProtoDetectProbingParserPor
 {
     SCEnter();
 
-    AppLayerProtoDetectProbingParserPort *p = SCMalloc(sizeof(AppLayerProtoDetectProbingParserPort));
+    AppLayerProtoDetectProbingParserPort *p =
+            SCCalloc(1, sizeof(AppLayerProtoDetectProbingParserPort));
     if (unlikely(p == NULL)) {
         exit(EXIT_FAILURE);
     }
-    memset(p, 0, sizeof(AppLayerProtoDetectProbingParserPort));
 
     SCReturnPtr(p, "AppLayerProtoDetectProbingParserPort");
 }
@@ -752,11 +752,10 @@ static AppLayerProtoDetectProbingParser *AppLayerProtoDetectProbingParserAlloc(v
 {
     SCEnter();
 
-    AppLayerProtoDetectProbingParser *p = SCMalloc(sizeof(AppLayerProtoDetectProbingParser));
+    AppLayerProtoDetectProbingParser *p = SCCalloc(1, sizeof(AppLayerProtoDetectProbingParser));
     if (unlikely(p == NULL)) {
         exit(EXIT_FAILURE);
     }
-    memset(p, 0, sizeof(AppLayerProtoDetectProbingParser));
 
     SCReturnPtr(p, "AppLayerProtoDetectProbingParser");
 }
@@ -1269,10 +1268,9 @@ static int AppLayerProtoDetectPMMapSignatures(AppLayerProtoDetectPMCtx *ctx)
     int mpm_ret;
     SigIntId id = 0;
 
-    ctx->map = SCMalloc(ctx->max_sig_id * sizeof(AppLayerProtoDetectPMSignature *));
+    ctx->map = SCCalloc(ctx->max_sig_id, sizeof(AppLayerProtoDetectPMSignature *));
     if (ctx->map == NULL)
         goto error;
-    memset(ctx->map, 0, ctx->max_sig_id * sizeof(AppLayerProtoDetectPMSignature *));
 
     /* add an array indexed by rule id to look up the sig */
     for (s = ctx->head; s != NULL; ) {
@@ -1902,6 +1900,11 @@ int AppLayerProtoDetectConfProtoDetectionEnabledDefault(
     if (RunmodeIsUnittests())
         goto enabled;
 
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    // so that fuzzig takes place for DNP3 and such
+    default_enabled = true;
+#endif
+
     r = snprintf(param, sizeof(param), "%s%s%s", "app-layer.protocols.",
                  alproto, ".enabled");
     if (r < 0) {
@@ -1980,10 +1983,9 @@ AppLayerProtoDetectThreadCtx *AppLayerProtoDetectGetCtxThread(void)
         }
     }
 
-    alpd_tctx = SCMalloc(sizeof(*alpd_tctx));
+    alpd_tctx = SCCalloc(1, sizeof(*alpd_tctx));
     if (alpd_tctx == NULL)
         goto error;
-    memset(alpd_tctx, 0, sizeof(*alpd_tctx));
 
     /* Get the max pat id for all the mpm ctxs. */
     if (PmqSetup(&alpd_tctx->pmq) < 0)
@@ -1993,7 +1995,7 @@ AppLayerProtoDetectThreadCtx *AppLayerProtoDetectGetCtxThread(void)
         for (j = 0; j < 2; j++) {
             mpm_ctx = &alpd_ctx.ctx_ipp[i].ctx_pm[j].mpm_ctx;
             mpm_tctx = &alpd_tctx->mpm_tctx[i][j];
-            mpm_table[mpm_ctx->mpm_type].InitThreadCtx(mpm_ctx, mpm_tctx);
+            MpmInitThreadCtx(mpm_tctx, mpm_ctx->mpm_type);
         }
     }
 
@@ -2023,7 +2025,7 @@ void AppLayerProtoDetectDestroyCtxThread(AppLayerProtoDetectThreadCtx *alpd_tctx
         for (dir = 0; dir < 2; dir++) {
             mpm_ctx = &alpd_ctx.ctx_ipp[ipproto_map].ctx_pm[dir].mpm_ctx;
             mpm_tctx = &alpd_tctx->mpm_tctx[ipproto_map][dir];
-            mpm_table[mpm_ctx->mpm_type].DestroyThreadCtx(mpm_ctx, mpm_tctx);
+            MpmDestroyThreadCtx(mpm_tctx, mpm_ctx->mpm_type);
         }
     }
     PmqFree(&alpd_tctx->pmq);

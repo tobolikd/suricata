@@ -226,15 +226,15 @@ end_fp:
  *  \brief Condition function for TLS logger
  *  \retval bool true or false -- log now?
  */
-static int LogTlsStoreCondition(ThreadVars *tv, const Packet *p, void *state,
-                                void *tx, uint64_t tx_id)
+static bool LogTlsStoreCondition(
+        ThreadVars *tv, const Packet *p, void *state, void *tx, uint64_t tx_id)
 {
     if (p->flow == NULL) {
-        return FALSE;
+        return false;
     }
 
     if (!(PKT_IS_TCP(p))) {
-        return FALSE;
+        return false;
     }
 
     SSLState *ssl_state = (SSLState *)state;
@@ -250,9 +250,9 @@ static int LogTlsStoreCondition(ThreadVars *tv, const Packet *p, void *state,
             ssl_state->server_connp.cert0_subject == NULL)
         goto dontlog;
 
-    return TRUE;
+    return true;
 dontlog:
-    return FALSE;
+    return false;
 }
 
 static int LogTlsStoreLogger(ThreadVars *tv, void *thread_data, const Packet *p,
@@ -275,10 +275,9 @@ static int LogTlsStoreLogger(ThreadVars *tv, void *thread_data, const Packet *p,
 
 static TmEcode LogTlsStoreLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    LogTlsStoreLogThread *aft = SCMalloc(sizeof(LogTlsStoreLogThread));
+    LogTlsStoreLogThread *aft = SCCalloc(1, sizeof(LogTlsStoreLogThread));
     if (unlikely(aft == NULL))
         return TM_ECODE_FAILED;
-    memset(aft, 0, sizeof(LogTlsStoreLogThread));
 
     if (initdata == NULL) {
         SCLogDebug("Error getting context for LogTLSStore. \"initdata\" argument NULL");

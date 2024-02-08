@@ -83,12 +83,10 @@ void DetectSmbNamedPipeRegister(void)
     sigmatch_table[KEYWORD_ID].flags |= SIGMATCH_NOOPT|SIGMATCH_INFO_STICKY_BUFFER;
     sigmatch_table[KEYWORD_ID].desc = "sticky buffer to match on SMB named pipe in tree connect";
 
-    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOSERVER, 2,
-            PrefilterGenericMpmRegister, GetNamedPipeData,
-            ALPROTO_SMB, 1);
+    DetectAppLayerMpmRegister(BUFFER_NAME, SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister,
+            GetNamedPipeData, ALPROTO_SMB, 1);
 
-    DetectAppLayerInspectEngineRegister2(BUFFER_NAME,
-            ALPROTO_SMB, SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister(BUFFER_NAME, ALPROTO_SMB, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectBufferGeneric, GetNamedPipeData);
 
     g_smb_named_pipe_buffer_id = DetectBufferTypeGetByName(BUFFER_NAME);
@@ -146,12 +144,10 @@ void DetectSmbShareRegister(void)
     sigmatch_table[KEYWORD_ID].flags |= SIGMATCH_NOOPT|SIGMATCH_INFO_STICKY_BUFFER;
     sigmatch_table[KEYWORD_ID].desc = "sticky buffer to match on SMB share name in tree connect";
 
-    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOSERVER, 2,
-            PrefilterGenericMpmRegister, GetShareData,
-            ALPROTO_SMB, 1);
+    DetectAppLayerMpmRegister(BUFFER_NAME, SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister,
+            GetShareData, ALPROTO_SMB, 1);
 
-    DetectAppLayerInspectEngineRegister2(BUFFER_NAME,
-            ALPROTO_SMB, SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister(BUFFER_NAME, ALPROTO_SMB, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectBufferGeneric, GetShareData);
 
     g_smb_share_buffer_id = DetectBufferTypeGetByName(BUFFER_NAME);

@@ -61,19 +61,6 @@ typedef struct JsonHttp2LogThread_ {
     OutputJsonThreadCtx *ctx;
 } JsonHttp2LogThread;
 
-
-bool EveHTTP2AddMetadata(const Flow *f, uint64_t tx_id, JsonBuilder *jb)
-{
-    void *state = FlowGetAppState(f);
-    if (state) {
-        void *tx = AppLayerParserGetTx(f->proto, ALPROTO_HTTP2, state, tx_id);
-        if (tx) {
-            return rs_http2_log_json(tx, jb);
-        }
-    }
-    return false;
-}
-
 static int JsonHttp2Logger(ThreadVars *tv, void *thread_data, const Packet *p,
                          Flow *f, void *state, void *txptr, uint64_t tx_id)
 {
@@ -88,11 +75,9 @@ static int JsonHttp2Logger(ThreadVars *tv, void *thread_data, const Packet *p,
     if (unlikely(js == NULL))
         return 0;
 
-    jb_open_object(js, "http");
     if (!rs_http2_log_json(txptr, js)) {
         goto end;
     }
-    jb_close(js);
     OutputJsonBuilderBuffer(js, aft->ctx);
 end:
     jb_free(js);
@@ -153,7 +138,7 @@ static OutputInitResult OutputHttp2LogInitSub(ConfNode *conf, OutputCtx *parent_
     OutputInitResult result = { NULL, false };
     OutputJsonCtx *ojc = parent_ctx->data;
 
-    OutputHttp2Ctx *http2_ctx = SCMalloc(sizeof(OutputHttp2Ctx));
+    OutputHttp2Ctx *http2_ctx = SCCalloc(1, sizeof(OutputHttp2Ctx));
     if (unlikely(http2_ctx == NULL))
         return result;
 

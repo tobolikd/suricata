@@ -80,14 +80,14 @@ void DetectDceIfaceRegister(void)
 
     g_dce_generic_list_id = DetectBufferTypeRegister("dce_generic");
 
-    DetectAppLayerInspectEngineRegister2("dce_generic", ALPROTO_DCERPC, SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister("dce_generic", ALPROTO_DCERPC, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectGenericList, NULL);
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "dce_generic", ALPROTO_SMB, SIG_FLAG_TOSERVER, 0, DetectEngineInspectGenericList, NULL);
 
-    DetectAppLayerInspectEngineRegister2("dce_generic", ALPROTO_DCERPC, SIG_FLAG_TOCLIENT, 0,
+    DetectAppLayerInspectEngineRegister("dce_generic", ALPROTO_DCERPC, SIG_FLAG_TOCLIENT, 0,
             DetectEngineInspectGenericList, NULL);
-    DetectAppLayerInspectEngineRegister2(
+    DetectAppLayerInspectEngineRegister(
             "dce_generic", ALPROTO_SMB, SIG_FLAG_TOCLIENT, 0, DetectEngineInspectGenericList, NULL);
 }
 
@@ -154,15 +154,10 @@ static int DetectDceIfaceSetup(DetectEngineCtx *de_ctx, Signature *s, const char
         return -1;
     }
 
-    SigMatch *sm = SigMatchAlloc();
-    if (sm == NULL) {
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_DCE_IFACE, did, g_dce_generic_list_id) == NULL) {
+        DetectDceIfaceFree(de_ctx, did);
         return -1;
     }
-
-    sm->type = DETECT_DCE_IFACE;
-    sm->ctx = did;
-
-    SigMatchAppendSMToList(s, sm, g_dce_generic_list_id);
     return 0;
 }
 

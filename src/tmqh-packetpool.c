@@ -35,6 +35,8 @@
 #include "util-validate.h"
 #include "action-globals.h"
 
+extern uint16_t max_pending_packets;
+
 /* Number of freed packet to save for one pool before freeing them. */
 #define MAX_PENDING_RETURN_PACKETS 32
 static uint32_t max_pending_return_packets = MAX_PENDING_RETURN_PACKETS;
@@ -66,75 +68,31 @@ static int PacketPoolIsEmpty(PktPool *pool)
     return 1;
 }
 
+static void UpdateReturnThreshold(PktPool *pool)
+{
+    const float perc = (float)pool->cnt / (float)max_pending_packets;
+    uint32_t threshold = (uint32_t)(perc * (float)max_pending_return_packets);
+    if (threshold != SC_ATOMIC_GET(pool->return_stack.return_threshold)) {
+        SC_ATOMIC_SET(pool->return_stack.return_threshold, threshold);
+    }
+}
+
 void PacketPoolWait(void)
 {
     PktPool *my_pool = GetThreadPacketPool();
 
     if (PacketPoolIsEmpty(my_pool)) {
+        SC_ATOMIC_SET(my_pool->return_stack.return_threshold, 1);
+
         SCMutexLock(&my_pool->return_stack.mutex);
-        SC_ATOMIC_ADD(my_pool->return_stack.sync_now, 1);
         SCCondWait(&my_pool->return_stack.cond, &my_pool->return_stack.mutex);
         SCMutexUnlock(&my_pool->return_stack.mutex);
+
+        UpdateReturnThreshold(my_pool);
     }
 
     while(PacketPoolIsEmpty(my_pool))
         cc_barrier();
-}
-
-/** \brief Wait until we have the requested amount of packets in the pool
- *
- *  In some cases waiting for packets is undesirable. Especially when
- *  a wait would happen under a lock of some kind, other parts of the
- *  engine could have to wait.
- *
- *  This function only returns when at least N packets are in our pool.
- *
- *  If counting in our pool's main stack didn't give us the number we
- *  are seeking, we check if the return stack is filled and add those
- *  to our main stack. Then we retry.
- *
- *  \param n number of packets needed
- */
-void PacketPoolWaitForN(int n)
-{
-    PktPool *my_pool = GetThreadPacketPool();
-
-    while (1) {
-        PacketPoolWait();
-
-        /* count packets in our stack */
-        int i = 0;
-        Packet *p, *pp;
-        pp = p = my_pool->head;
-        while (p != NULL) {
-            if (++i == n)
-                return;
-
-            pp = p;
-            p = p->next;
-        }
-
-        /* check return stack, return to our pool and retry counting */
-        if (my_pool->return_stack.head != NULL) {
-            SCMutexLock(&my_pool->return_stack.mutex);
-            /* Move all the packets from the locked return stack to the local stack. */
-            if (pp) {
-                pp->next = my_pool->return_stack.head;
-            } else {
-                my_pool->head = my_pool->return_stack.head;
-            }
-            my_pool->return_stack.head = NULL;
-            SC_ATOMIC_RESET(my_pool->return_stack.sync_now);
-            SCMutexUnlock(&my_pool->return_stack.mutex);
-
-        /* or signal that we need packets and wait */
-        } else {
-            SCMutexLock(&my_pool->return_stack.mutex);
-            SC_ATOMIC_ADD(my_pool->return_stack.sync_now, 1);
-            SCCondWait(&my_pool->return_stack.cond, &my_pool->return_stack.mutex);
-            SCMutexUnlock(&my_pool->return_stack.mutex);
-        }
-    }
 }
 
 /** \brief a initialized packet
@@ -154,6 +112,8 @@ static void PacketPoolGetReturnedPackets(PktPool *pool)
     /* Move all the packets from the locked return stack to the local stack. */
     pool->head = pool->return_stack.head;
     pool->return_stack.head = NULL;
+    pool->cnt += pool->return_stack.cnt;
+    pool->return_stack.cnt = 0;
     SCMutexUnlock(&pool->return_stack.mutex);
 }
 
@@ -175,8 +135,14 @@ Packet *PacketPoolGetPacket(void)
         /* Stack is not empty. */
         Packet *p = pool->head;
         pool->head = p->next;
+        pool->cnt--;
         p->pool = pool;
         PacketReinit(p);
+
+        UpdateReturnThreshold(pool);
+        SCLogDebug("pp: %0.2f cnt:%u max:%d threshold:%u",
+                ((float)pool->cnt / (float)max_pending_packets) * (float)100, pool->cnt,
+                max_pending_packets, SC_ATOMIC_GET(pool->return_stack.return_threshold));
         return p;
     }
 
@@ -191,8 +157,14 @@ Packet *PacketPoolGetPacket(void)
         /* Stack is not empty. */
         Packet *p = pool->head;
         pool->head = p->next;
+        pool->cnt--;
         p->pool = pool;
         PacketReinit(p);
+
+        UpdateReturnThreshold(pool);
+        SCLogDebug("pp: %0.2f cnt:%u max:%d threshold:%u",
+                ((float)pool->cnt / (float)max_pending_packets) * (float)100, pool->cnt,
+                max_pending_packets, SC_ATOMIC_GET(pool->return_stack.return_threshold));
         return p;
     }
 
@@ -226,28 +198,33 @@ void PacketPoolReturnPacket(Packet *p)
         /* Push back onto this thread's own stack, so no locking. */
         p->next = my_pool->head;
         my_pool->head = p;
+        my_pool->cnt++;
     } else {
         PktPool *pending_pool = my_pool->pending_pool;
-        if (pending_pool == NULL) {
-            /* No pending packet, so store the current packet. */
-            p->next = NULL;
-            my_pool->pending_pool = pool;
-            my_pool->pending_head = p;
-            my_pool->pending_tail = p;
-            my_pool->pending_count = 1;
-        } else if (pending_pool == pool) {
-            /* Another packet for the pending pool list. */
-            p->next = my_pool->pending_head;
-            my_pool->pending_head = p;
-            my_pool->pending_count++;
-            if (SC_ATOMIC_GET(pool->return_stack.sync_now) || my_pool->pending_count > max_pending_return_packets) {
+        if (pending_pool == NULL || pending_pool == pool) {
+            if (pending_pool == NULL) {
+                /* No pending packet, so store the current packet. */
+                p->next = NULL;
+                my_pool->pending_pool = pool;
+                my_pool->pending_head = p;
+                my_pool->pending_tail = p;
+                my_pool->pending_count = 1;
+            } else if (pending_pool == pool) {
+                /* Another packet for the pending pool list. */
+                p->next = my_pool->pending_head;
+                my_pool->pending_head = p;
+                my_pool->pending_count++;
+            }
+
+            const uint32_t threshold = SC_ATOMIC_GET(pool->return_stack.return_threshold);
+            if (my_pool->pending_count >= threshold) {
                 /* Return the entire list of pending packets. */
                 SCMutexLock(&pool->return_stack.mutex);
                 my_pool->pending_tail->next = pool->return_stack.head;
                 pool->return_stack.head = my_pool->pending_head;
-                SC_ATOMIC_RESET(pool->return_stack.sync_now);
-                SCMutexUnlock(&pool->return_stack.mutex);
+                pool->return_stack.cnt += my_pool->pending_count;
                 SCCondSignal(&pool->return_stack.cond);
+                SCMutexUnlock(&pool->return_stack.mutex);
                 /* Clear the list of pending packets to return. */
                 my_pool->pending_pool = NULL;
                 my_pool->pending_head = NULL;
@@ -259,9 +236,9 @@ void PacketPoolReturnPacket(Packet *p)
             SCMutexLock(&pool->return_stack.mutex);
             p->next = pool->return_stack.head;
             pool->return_stack.head = p;
-            SC_ATOMIC_RESET(pool->return_stack.sync_now);
-            SCMutexUnlock(&pool->return_stack.mutex);
+            pool->return_stack.cnt++;
             SCCondSignal(&pool->return_stack.cond);
+            SCMutexUnlock(&pool->return_stack.mutex);
         }
     }
 }
@@ -278,13 +255,12 @@ void PacketPoolInitEmpty(void)
 
     SCMutexInit(&my_pool->return_stack.mutex, NULL);
     SCCondInit(&my_pool->return_stack.cond, NULL);
-    SC_ATOMIC_INIT(my_pool->return_stack.sync_now);
+    SC_ATOMIC_INIT(my_pool->return_stack.return_threshold);
+    SC_ATOMIC_SET(my_pool->return_stack.return_threshold, 32);
 }
 
 void PacketPoolInit(void)
 {
-    extern uint16_t max_pending_packets;
-
     PktPool *my_pool = GetThreadPacketPool();
 
 #ifdef DEBUG_VALIDATION
@@ -295,7 +271,8 @@ void PacketPoolInit(void)
 
     SCMutexInit(&my_pool->return_stack.mutex, NULL);
     SCCondInit(&my_pool->return_stack.cond, NULL);
-    SC_ATOMIC_INIT(my_pool->return_stack.sync_now);
+    SC_ATOMIC_INIT(my_pool->return_stack.return_threshold);
+    SC_ATOMIC_SET(my_pool->return_stack.return_threshold, 32);
 
     /* pre allocate packets */
     SCLogDebug("preallocating packets... packet size %" PRIuMAX "",

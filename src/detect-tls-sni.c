@@ -1,4 +1,4 @@
-/* Copyright (C) 2007-2016 Open Information Security Foundation
+/* Copyright (C) 2007-2023 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -73,11 +73,11 @@ void DetectTlsSniRegister(void)
     sigmatch_table[DETECT_AL_TLS_SNI].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_AL_TLS_SNI].flags |= SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2("tls.sni", ALPROTO_TLS, SIG_FLAG_TOSERVER, 0,
+    DetectAppLayerInspectEngineRegister("tls.sni", ALPROTO_TLS, SIG_FLAG_TOSERVER, 0,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2("tls.sni", SIG_FLAG_TOSERVER, 2,
-            PrefilterGenericMpmRegister, GetData, ALPROTO_TLS, 0);
+    DetectAppLayerMpmRegister(
+            "tls.sni", SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister, GetData, ALPROTO_TLS, 0);
 
     DetectBufferTypeSetDescriptionByName("tls.sni",
             "TLS Server Name Indication (SNI) extension");

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020 Open Information Security Foundation
+/* Copyright (C) 2023 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -21,10 +21,9 @@
  * \author Sascha Steinbiss <sascha@steinbiss.name>
  */
 
-#ifndef __APP_LAYER_MQTT_H__
-#define __APP_LAYER_MQTT_H__
+#ifndef __DETECT_MQTT_CONNECT_PROTOCOLSTRING_H__
+#define __DETECT_MQTT_CONNECT_PROTOCOLSTRING_H__
 
-void RegisterMQTTParsers(void);
-void MQTTParserRegisterTests(void);
+void DetectMQTTConnectProtocolStringRegister(void);
 
-#endif /* __APP_LAYER_MQTT_H__ */
+#endif /* __DETECT_MQTT_CONNECT_PROTOCOLSTRING_H__ */

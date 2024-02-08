@@ -221,13 +221,7 @@ pub struct DNSAnswerEntry {
 }
 
 #[derive(Debug)]
-pub struct DNSRequest {
-    pub header: DNSHeader,
-    pub queries: Vec<DNSQueryEntry>,
-}
-
-#[derive(Debug)]
-pub struct DNSResponse {
+pub struct DNSMessage {
     pub header: DNSHeader,
     pub queries: Vec<DNSQueryEntry>,
     pub answers: Vec<DNSAnswerEntry>,
@@ -237,8 +231,8 @@ pub struct DNSResponse {
 #[derive(Debug, Default)]
 pub struct DNSTransaction {
     pub id: u64,
-    pub request: Option<DNSRequest>,
-    pub response: Option<DNSResponse>,
+    pub request: Option<DNSMessage>,
+    pub response: Option<DNSMessage>,
     pub tx_data: AppLayerTxData,
 }
 
@@ -250,10 +244,10 @@ impl Transaction for DNSTransaction {
 
 impl DNSTransaction {
     pub fn new(direction: Direction) -> Self {
-	Self {
-	    tx_data: AppLayerTxData::for_direction(direction),
+        Self {
+            tx_data: AppLayerTxData::for_direction(direction),
             ..Default::default()
-	}
+        }
     }
 
     /// Get the DNS transactions ID (not the internal tracking ID).
@@ -402,7 +396,7 @@ impl DNSState {
             return !is_tcp;
         };
 
-        match parser::dns_parse_request_body(body, input, header) {
+        match parser::dns_parse_body(body, input, header) {
             Ok((_, request)) => {
                 if request.header.flags & 0x8000 != 0 {
                     SCLogDebug!("DNS message is not a request");
@@ -474,7 +468,7 @@ impl DNSState {
             return !is_tcp;
         };
 
-        match parser::dns_parse_response_body(body, input, header) {
+        match parser::dns_parse_body(body, input, header) {
             Ok((_, response)) => {
                 SCLogDebug!("Response header flags: {}", response.header.flags);
 
@@ -702,14 +696,9 @@ fn probe(input: &[u8], dlen: usize) -> (bool, bool, bool) {
         }
     }
 
-    match parser::dns_parse_request(input) {
-        Ok((_, request)) => {
-            return probe_header_validity(&request.header, dlen);
-        }
-        Err(Err::Incomplete(_)) => match parser::dns_parse_header(input) {
-            Ok((_, header)) => {
-                return probe_header_validity(&header, dlen);
-            }
+    match parser::dns_parse_header(input) {
+        Ok((body, header)) => match parser::dns_parse_body(body, input, header) {
+            Ok((_, request)) => probe_header_validity(&request.header, dlen),
             Err(Err::Incomplete(_)) => (false, false, true),
             Err(_) => (false, false, false),
         },
@@ -864,21 +853,54 @@ pub unsafe extern "C" fn rs_dns_state_get_tx_data(
 
 export_state_data_get!(rs_dns_get_state_data, DNSState);
 
+/// Get the DNS query name at index i.
 #[no_mangle]
-pub unsafe extern "C" fn rs_dns_tx_get_query_name(
-    tx: &mut DNSTransaction, i: u32, buf: *mut *const u8, len: *mut u32,
-) -> u8 {
-    if let Some(request) = &tx.request {
-        if (i as usize) < request.queries.len() {
-            let query = &request.queries[i as usize];
+pub unsafe extern "C" fn SCDnsTxGetQueryName(
+    tx: &mut DNSTransaction, to_client: bool, i: u32, buf: *mut *const u8, len: *mut u32,
+) -> bool {
+    let queries = if to_client {
+        tx.response.as_ref().map(|response| &response.queries)
+    } else {
+        tx.request.as_ref().map(|request| &request.queries)
+    };
+    let index = i as usize;
+
+    if let Some(queries) = queries {
+        if let Some(query) = queries.get(index) {
             if !query.name.is_empty() {
-                *len = query.name.len() as u32;
                 *buf = query.name.as_ptr();
-                return 1;
+                *len = query.name.len() as u32;
+                return true;
             }
         }
     }
-    return 0;
+
+    false
+}
+
+/// Get the DNS response answer name and index i.
+#[no_mangle]
+pub unsafe extern "C" fn SCDnsTxGetAnswerName(
+    tx: &mut DNSTransaction, to_client: bool, i: u32, buf: *mut *const u8, len: *mut u32,
+) -> bool {
+    let answers = if to_client {
+        tx.response.as_ref().map(|response| &response.answers)
+    } else {
+        tx.request.as_ref().map(|request| &request.answers)
+    };
+    let index = i as usize;
+
+    if let Some(answers) = answers {
+        if let Some(answer) = answers.get(index) {
+            if !answer.name.is_empty() {
+                *buf = answer.name.as_ptr();
+                *len = answer.name.len() as u32;
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /// Get the DNS transaction ID of a transaction.

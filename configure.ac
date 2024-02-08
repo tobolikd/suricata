@@ -1,4 +1,4 @@
-    AC_INIT([suricata],[7.0.1-dev])
+    AC_INIT([suricata],[8.0.0-dev])
     m4_ifndef([AM_SILENT_RULES], [m4_define([AM_SILENT_RULES],[])])AM_SILENT_RULES([yes])
     AC_CONFIG_HEADERS([src/autoconf.h])
     AC_CONFIG_SRCDIR([src/suricata.c])
@@ -137,6 +137,7 @@
     AC_CHECK_HEADERS([getopt.h])
     AC_CHECK_HEADERS([limits.h netdb.h netinet/in.h poll.h sched.h signal.h])
     AC_CHECK_HEADERS([stdarg.h stdint.h stdio.h stdlib.h stdbool.h string.h strings.h sys/ioctl.h])
+    AC_CHECK_HEADERS([math.h])
     AC_CHECK_HEADERS([syslog.h sys/prctl.h sys/socket.h sys/stat.h sys/syscall.h])
     AC_CHECK_HEADERS([sys/time.h time.h unistd.h sys/param.h])
     AC_CHECK_HEADERS([sys/ioctl.h linux/if_ether.h linux/if_packet.h linux/filter.h])
@@ -217,6 +218,13 @@
         AC_DEFINE([HAVE_GETRANDOM], [1], [Use getrandom]),
         [], [
             #include <sys/random.h> 
+            ])
+
+    AC_CHECK_HEADERS([malloc.h])
+    AC_CHECK_DECL([malloc_trim],
+        AC_DEFINE([HAVE_MALLOC_TRIM], [1], [Use malloc_trim]),
+        [], [
+            #include <malloc.h> 
             ])
 
     OCFLAGS=$CFLAGS
@@ -474,6 +482,23 @@
                     AC_SUBST(LLC)
                   ],
                   [AC_MSG_ERROR([clang needed to build ebpf files])])
+            AC_MSG_CHECKING([libbpf has bpf/bpf_helpers.h])
+            AC_COMPILE_IFELSE(
+                [AC_LANG_PROGRAM(
+                    [
+                        #include <stddef.h>
+                        #include <linux/bpf.h>
+                        #include <bpf/bpf_helpers.h>
+                    ],
+                    [
+                    ])],
+                [HAVE_BPF="yes"],
+                [HAVE_BPF="no"])
+            if test "$HAVE_BPF" = "no"; then
+                AC_MSG_ERROR([libbpf include bpf/bpf_helpers.h not found])
+            else
+                AC_MSG_RESULT([ok])
+            fi
           ])
 
   # enable debug output
@@ -1839,7 +1864,8 @@
 
     if test "$enable_napatech" = "yes"; then
         CPPFLAGS="${CPPFLAGS} -I${with_napatech_includes}"
-        LDFLAGS="${LDFLAGS} -L${with_napatech_libraries} -lntapi"
+        LDFLAGS="${LDFLAGS} -L${with_napatech_libraries}"
+        LIBS="${LIBS} -lntapi"
         AC_CHECK_HEADER(nt.h,NAPATECH="yes",NAPATECH="no")
         if test "$NAPATECH" != "no"; then
             NAPATECH=""
@@ -2241,15 +2267,30 @@ fi
         AC_DEFINE([CLS],[64],[L1 cache line size])
     fi
 
-# sphinx for documentation
-    AC_PATH_PROG(HAVE_SPHINXBUILD, sphinx-build, "no")
-    if test "$HAVE_SPHINXBUILD" = "no"; then
+# sphinx-build for documentation, and also check for a new enough version
+    AC_PATH_PROG([SPHINX_BUILD], [sphinx-build], [no])
+    if test "$SPHINX_BUILD" != "no"; then
+        MIN_SPHINX_BUILD_VERSION="3.4.3"
+        sphinx_build_version=$($SPHINX_BUILD --version 2>&1 | cut -d' ' -f2-)
+        AC_MSG_CHECKING([for sphinx-build >= $MIN_SPHINX_BUILD_VERSION])
+        AS_VERSION_COMPARE([$sphinx_build_version], [$MIN_SPHINX_BUILD_VERSION],
+            [
+                AC_MSG_RESULT([no, documentation will not be built])
+                SPHINX_BUILD="no"
+            ],
+            [], [])
+        if test "$SPHINX_BUILD" != "no"; then
+            AC_MSG_RESULT([yes])
+        fi
+    fi
+
+    if test "$SPHINX_BUILD" = "no"; then
        enable_sphinxbuild=no
        if test -e "$srcdir/doc/userguide/suricata.1"; then
            have_suricata_man=yes
        fi
     fi
-    AM_CONDITIONAL([HAVE_SPHINXBUILD], [test "x$enable_sphinxbuild" != "xno"])
+    AM_CONDITIONAL([SPHINX_BUILD], [test "x$enable_sphinxbuild" != "xno"])
     AM_CONDITIONAL([HAVE_SURICATA_MAN], [test "x$have_suricata_man" = "xyes"])
 
 # pdflatex for the pdf version of the user manual
@@ -2609,7 +2650,9 @@ AC_CONFIG_FILES(suricata.yaml etc/Makefile etc/suricata.logrotate etc/suricata.s
 AC_CONFIG_FILES(python/Makefile python/suricata/config/defaults.py)
 AC_CONFIG_FILES(ebpf/Makefile)
 AC_CONFIG_FILES(libsuricata-config)
+AC_CONFIG_FILES(examples/plugins/c-json-filetype/Makefile)
 AC_CONFIG_FILES(dpdk/Makefile dpdk/prefilter/Makefile)
+
 AC_OUTPUT
 
 SURICATA_BUILD_CONF="Suricata Configuration:

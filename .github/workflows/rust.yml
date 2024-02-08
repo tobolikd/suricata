@@ -1,8 +1,12 @@
 name: Check Rust
 
 on:
-  - push
-  - pull_request
+  push:
+    paths-ignore:
+      - "doc/**"
+  pull_request:
+    paths-ignore:
+      - "doc/**"
 
 permissions:
   contents: read #  to fetch code (actions/checkout)
@@ -79,5 +83,5 @@ jobs:
               echo "::error ::Clippy --fix made changes, please fix"
               exit 1
           fi
-      - run: cargo clippy --all-features
+      - run: cargo clippy --all-features --all-targets
         working-directory: rust

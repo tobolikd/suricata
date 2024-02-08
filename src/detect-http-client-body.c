@@ -103,15 +103,15 @@ void DetectHttpClientBodyRegister(void)
     sigmatch_table[DETECT_HTTP_REQUEST_BODY].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_HTTP_REQUEST_BODY].flags |= SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2("http_client_body", ALPROTO_HTTP1, SIG_FLAG_TOSERVER,
+    DetectAppLayerInspectEngineRegister("http_client_body", ALPROTO_HTTP1, SIG_FLAG_TOSERVER,
             HTP_REQUEST_BODY, DetectEngineInspectBufferHttpBody, NULL);
 
-    DetectAppLayerMpmRegister2("http_client_body", SIG_FLAG_TOSERVER, 2,
+    DetectAppLayerMpmRegister("http_client_body", SIG_FLAG_TOSERVER, 2,
             PrefilterMpmHttpRequestBodyRegister, NULL, ALPROTO_HTTP1, HTP_REQUEST_BODY);
 
-    DetectAppLayerInspectEngineRegister2("http_client_body", ALPROTO_HTTP2, SIG_FLAG_TOSERVER,
+    DetectAppLayerInspectEngineRegister("http_client_body", ALPROTO_HTTP2, SIG_FLAG_TOSERVER,
             HTTP2StateDataClient, DetectEngineInspectFiledata, NULL);
-    DetectAppLayerMpmRegister2("http_client_body", SIG_FLAG_TOSERVER, 2,
+    DetectAppLayerMpmRegister("http_client_body", SIG_FLAG_TOSERVER, 2,
             PrefilterMpmFiledataRegister, NULL, ALPROTO_HTTP2, HTTP2StateDataClient);
 
     DetectBufferTypeSetDescriptionByName("http_client_body",
@@ -323,15 +323,11 @@ static uint8_t DetectEngineInspectBufferHttpBody(DetectEngineCtx *de_ctx,
     ci_flags |= (offset == 0 ? DETECT_CI_FLAGS_START : 0);
     ci_flags |= buffer->flags;
 
-    det_ctx->discontinue_matching = 0;
-    det_ctx->buffer_offset = 0;
-    det_ctx->inspection_recursion_counter = 0;
-
     /* Inspect all the uricontents fetched on each
      * transaction at the app layer */
-    int r = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f, (uint8_t *)data,
+    const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f, data,
             data_len, offset, ci_flags, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-    if (r == 1) {
+    if (match) {
         return DETECT_ENGINE_INSPECT_SIG_MATCH;
     }
 
@@ -373,7 +369,7 @@ static void PrefilterTxHttpRequestBody(DetectEngineThreadCtx *det_ctx, const voi
 
     if (buffer->inspect_len >= mpm_ctx->minlen) {
         (void)mpm_table[mpm_ctx->mpm_type].Search(
-                mpm_ctx, &det_ctx->mtcu, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
+                mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, buffer->inspect, buffer->inspect_len);
         PREFILTER_PROFILING_ADD_BYTES(det_ctx, buffer->inspect_len);
     }
 }

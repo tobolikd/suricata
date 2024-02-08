@@ -43,10 +43,14 @@
 #include "detect-engine-threshold.h"
 #include "detect-engine-prefilter.h"
 
+#include "rust.h"
+
 #include "detect-engine-payload.h"
 #include "detect-engine-dcepayload.h"
 #include "detect-dns-opcode.h"
 #include "detect-dns-query.h"
+#include "detect-dns-answer-name.h"
+#include "detect-dns-query-name.h"
 #include "detect-tls-sni.h"
 #include "detect-tls-certs.h"
 #include "detect-tls-cert-fingerprint.h"
@@ -114,6 +118,8 @@
 #include "detect-rev.h"
 #include "detect-flow.h"
 #include "detect-flow-age.h"
+#include "detect-flow-pkts.h"
+#include "detect-requires.h"
 #include "detect-tcp-window.h"
 #include "detect-ftpbounce.h"
 #include "detect-isdataat.h"
@@ -218,6 +224,7 @@
 #include "detect-mqtt-connect-clientid.h"
 #include "detect-mqtt-connect-username.h"
 #include "detect-mqtt-connect-password.h"
+#include "detect-mqtt-connect-protocol-string.h"
 #include "detect-mqtt-connect-willtopic.h"
 #include "detect-mqtt-connect-willmessage.h"
 #include "detect-mqtt-connack-sessionpresent.h"
@@ -237,6 +244,7 @@
 
 #include "detect-transform-compress-whitespace.h"
 #include "detect-transform-strip-whitespace.h"
+#include "detect-transform-strip-pseudo-headers.h"
 #include "detect-transform-md5.h"
 #include "detect-transform-sha1.h"
 #include "detect-transform-sha256.h"
@@ -244,6 +252,8 @@
 #include "detect-transform-pcrexform.h"
 #include "detect-transform-urldecode.h"
 #include "detect-transform-xor.h"
+#include "detect-transform-casechange.h"
+#include "detect-transform-header-lowercase.h"
 
 #include "util-rule-vars.h"
 
@@ -511,6 +521,8 @@ void SigTableSetup(void)
 
     DetectDnsQueryRegister();
     DetectDnsOpcodeRegister();
+    DetectDnsAnswerNameRegister();
+    DetectDnsQueryNameRegister();
     DetectModbusRegister();
     DetectCipServiceRegister();
     DetectEnipCommandRegister();
@@ -561,6 +573,11 @@ void SigTableSetup(void)
     DetectReplaceRegister();
     DetectFlowRegister();
     DetectFlowAgeRegister();
+    DetectFlowPktsToClientRegister();
+    DetectFlowPktsToServerRegister();
+    DetectFlowBytesToClientRegister();
+    DetectFlowBytesToServerRegister();
+    DetectRequiresRegister();
     DetectWindowRegister();
     DetectRpcRegister();
     DetectFtpbounceRegister();
@@ -671,6 +688,7 @@ void SigTableSetup(void)
     DetectMQTTConnectClientIDRegister();
     DetectMQTTConnectUsernameRegister();
     DetectMQTTConnectPasswordRegister();
+    DetectMQTTConnectProtocolStringRegister();
     DetectMQTTConnectWillTopicRegister();
     DetectMQTTConnectWillMessageRegister();
     DetectMQTTConnackSessionPresentRegister();
@@ -689,6 +707,7 @@ void SigTableSetup(void)
 
     DetectTransformCompressWhitespaceRegister();
     DetectTransformStripWhitespaceRegister();
+    DetectTransformStripPseudoHeadersRegister();
     DetectTransformMd5Register();
     DetectTransformSha1Register();
     DetectTransformSha256Register();
@@ -696,6 +715,9 @@ void SigTableSetup(void)
     DetectTransformPcrexformRegister();
     DetectTransformUrlDecodeRegister();
     DetectTransformXorRegister();
+    DetectTransformToLowerRegister();
+    DetectTransformToUpperRegister();
+    DetectTransformHeaderLowercaseRegister();
 
     DetectFileHandlerRegister();
 

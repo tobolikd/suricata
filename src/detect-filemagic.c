@@ -222,13 +222,8 @@ static int DetectFilemagicSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
         return -1;
 
     DetectContentData *cd = (DetectContentData *)sm->ctx;
-    cd->flags |= DETECT_CONTENT_NOCASE;
-    /* Recreate the context with nocase chars */
-    SpmDestroyCtx(cd->spm_ctx);
-    cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 1, de_ctx->spm_global_thread_ctx);
-    if (cd->spm_ctx == NULL) {
+    if (DetectContentConvertToNocase(de_ctx, cd) != 0)
         return -1;
-    }
     if (DetectEngineContentModifierBufferSetup(
                 de_ctx, s, NULL, DETECT_FILE_MAGIC, g_file_magic_buffer_id, s->alproto) < 0)
         return -1;
@@ -325,16 +320,10 @@ static uint8_t DetectEngineInspectFilemagic(DetectEngineCtx *de_ctx, DetectEngin
         if (buffer == NULL)
             continue;
 
-        det_ctx->buffer_offset = 0;
-        det_ctx->discontinue_matching = 0;
-        det_ctx->inspection_recursion_counter = 0;
-        int match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd,
-                                              NULL, f,
-                                              (uint8_t *)buffer->inspect,
-                                              buffer->inspect_len,
-                                              buffer->inspect_offset, DETECT_CI_FLAGS_SINGLE,
-                                              DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-        if (match == 1) {
+        const bool match = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd, NULL, f,
+                buffer->inspect, buffer->inspect_len, buffer->inspect_offset,
+                DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
+        if (match) {
             return DETECT_ENGINE_INSPECT_SIG_MATCH;
         } else {
             r = DETECT_ENGINE_INSPECT_SIG_CANT_MATCH_FILES;
@@ -381,8 +370,7 @@ static void PrefilterTxFilemagic(DetectEngineThreadCtx *det_ctx, const void *pec
                 continue;
 
             if (buffer->inspect_len >= mpm_ctx->minlen) {
-                (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx,
-                        &det_ctx->mtcu, &det_ctx->pmq,
+                (void)mpm_table[mpm_ctx->mpm_type].Search(mpm_ctx, &det_ctx->mtc, &det_ctx->pmq,
                         buffer->inspect, buffer->inspect_len);
                 PREFILTER_PROFILING_ADD_BYTES(det_ctx, buffer->inspect_len);
             }

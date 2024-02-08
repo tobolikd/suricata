@@ -628,6 +628,13 @@ static int UnixMain(UnixCommand * this)
     UnixClient *uclient;
     UnixClient *tclient;
 
+    if (suricata_ctl_flags & SURICATA_STOP) {
+        TAILQ_FOREACH_SAFE (uclient, &this->clients, next, tclient) {
+            UnixCommandClose(this, uclient->fd);
+        }
+        return 1;
+    }
+
     /* Wait activity on the socket */
     FD_ZERO(&select_set);
     FD_SET(this->socket, &select_set);
@@ -647,13 +654,6 @@ static int UnixMain(UnixCommand * this)
         }
         SCLogError("Command server: select() fatal error: %s", strerror(errno));
         return 0;
-    }
-
-    if (suricata_ctl_flags & SURICATA_STOP) {
-        TAILQ_FOREACH_SAFE(uclient, &this->clients, next, tclient) {
-            UnixCommandClose(this, uclient->fd);
-        }
-        return 1;
     }
 
     /* timeout: continue */
@@ -1099,6 +1099,7 @@ int UnixManagerInit(void)
     UnixManagerRegisterCommand("unregister-tenant-handler", UnixSocketUnregisterTenantHandler, &command, UNIX_CMD_TAKE_ARGS);
     UnixManagerRegisterCommand("register-tenant", UnixSocketRegisterTenant, &command, UNIX_CMD_TAKE_ARGS);
     UnixManagerRegisterCommand("reload-tenant", UnixSocketReloadTenant, &command, UNIX_CMD_TAKE_ARGS);
+    UnixManagerRegisterCommand("reload-tenants", UnixSocketReloadTenants, &command, 0);
     UnixManagerRegisterCommand("unregister-tenant", UnixSocketUnregisterTenant, &command, UNIX_CMD_TAKE_ARGS);
     UnixManagerRegisterCommand("add-hostbit", UnixSocketHostbitAdd, &command, UNIX_CMD_TAKE_ARGS);
     UnixManagerRegisterCommand("remove-hostbit", UnixSocketHostbitRemove, &command, UNIX_CMD_TAKE_ARGS);

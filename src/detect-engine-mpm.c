@@ -86,7 +86,7 @@ static int g_mpm_list_cnt[DETECT_BUFFER_MPM_TYPE_SIZE] = { 0, 0, 0 };
  *
  *  \note to be used at start up / registration only. Errors are fatal.
  */
-void DetectAppLayerMpmRegister2(const char *name, int direction, int priority,
+void DetectAppLayerMpmRegister(const char *name, int direction, int priority,
         PrefilterRegisterFunc PrefilterRegister, InspectionBufferGetDataPtr GetData,
         AppProto alproto, int tx_min_progress)
 {
@@ -854,6 +854,9 @@ uint8_t PatternMatchDefaultMatcher(void)
 #endif
             if (strcmp("auto", mpm_algo) == 0) {
                 goto done;
+            } else if (strcmp("ac-bs", mpm_algo) == 0) {
+                SCLogWarning("mpm-algo \"ac-bs\" has been removed. See ticket #6586.");
+                goto done;
             }
             for (uint8_t u = 0; u < MPM_TABLE_SIZE; u++) {
                 if (mpm_table[u].name == NULL)
@@ -895,8 +898,7 @@ void PatternMatchThreadPrint(MpmThreadCtx *mpm_thread_ctx, uint16_t mpm_matcher)
 void PatternMatchThreadDestroy(MpmThreadCtx *mpm_thread_ctx, uint16_t mpm_matcher)
 {
     SCLogDebug("mpm_thread_ctx %p, mpm_matcher %"PRIu16"", mpm_thread_ctx, mpm_matcher);
-    if (mpm_table[mpm_matcher].DestroyThreadCtx != NULL)
-        mpm_table[mpm_matcher].DestroyThreadCtx(NULL, mpm_thread_ctx);
+    MpmDestroyThreadCtx(mpm_thread_ctx, mpm_matcher);
 }
 void PatternMatchThreadPrepare(MpmThreadCtx *mpm_thread_ctx, uint16_t mpm_matcher)
 {
@@ -942,10 +944,8 @@ uint32_t PatternStrength(uint8_t *pat, uint16_t patlen)
     return s;
 }
 
-static void PopulateMpmHelperAddPattern(MpmCtx *mpm_ctx,
-                                        const DetectContentData *cd,
-                                        const Signature *s, uint8_t flags,
-                                        int chop)
+static void PopulateMpmHelperAddPattern(MpmCtx *mpm_ctx, const DetectContentData *cd,
+        const Signature *s, const uint8_t flags, const int chop)
 {
     uint16_t pat_offset = cd->offset;
     uint16_t pat_depth = cd->depth;
@@ -1064,8 +1064,13 @@ static SigMatch *GetMpmForList(const Signature *s, SigMatch *list, SigMatch *mpm
     return mpm_sm;
 }
 
+int g_skip_prefilter = 0;
+
 void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
 {
+    if (g_skip_prefilter)
+        return;
+
     if (s->init_data->mpm_sm != NULL)
         return;
 

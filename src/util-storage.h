@@ -36,7 +36,9 @@ typedef enum StorageEnum_ {
 } StorageEnum;
 
 /** void ptr array for now */
-typedef void* Storage;
+typedef struct Storage {
+    void *ptr;
+} Storage;
 
 void StorageInit(void);
 void StorageCleanup(void);
@@ -66,11 +68,8 @@ int StorageSetById(Storage *storage, const StorageEnum type, const int id, void 
 /** \brief AllocById func for prealloc'd base storage (storage ptrs are part
  *         of another memory block) */
 void *StorageAllocByIdPrealloc(Storage *storage, StorageEnum type, int id);
-/** \brief AllocById func for when we manage the Storage ptr itself */
-void *StorageAllocById(Storage **storage, const StorageEnum type, const int id);
 void StorageFreeById(Storage *storage, const StorageEnum type, const int id);
 void StorageFreeAll(Storage *storage, const StorageEnum type);
-void StorageFree(Storage **storage, const StorageEnum type);
 
 void StorageRegisterTests(void);
 #endif

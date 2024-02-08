@@ -353,12 +353,9 @@ int DetectContentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *conten
         }
     }
 
-    SigMatch *sm = SigMatchAlloc();
-    if (sm == NULL)
+    if (SigMatchAppendSMToList(de_ctx, s, DETECT_CONTENT, (SigMatchCtx *)cd, sm_list) == NULL) {
         goto error;
-    sm->ctx = (void *)cd;
-    sm->type = DETECT_CONTENT;
-    SigMatchAppendSMToList(s, sm, sm_list);
+    }
 
     return 0;
 
@@ -386,9 +383,9 @@ void DetectContentFree(DetectEngineCtx *de_ctx, void *ptr)
     SCReturn;
 }
 
-/*
+/**
  *  \brief Determine the size needed to accommodate the content
- *  elements of a signature
+ *         elements of a signature
  *  \param s signature to get dsize value from
  *  \param max_size Maximum buffer/data size allowed.
  *  \param list signature match list.
@@ -574,10 +571,21 @@ static void PropagateLimits(Signature *s, SigMatch *sm_head)
                 SCLogDebug("stored: offset %u depth %u offset_plus_pat %u "
                            "has_active_depth_chain %s",
                         offset, depth, offset_plus_pat, has_active_depth_chain ? "true" : "false");
-                if (cd->flags & DETECT_CONTENT_DISTANCE && cd->distance >= 0) {
-                    VALIDATE((uint32_t)offset_plus_pat + cd->distance <= UINT16_MAX);
-                    offset = cd->offset = (uint16_t)(offset_plus_pat + cd->distance);
-                    SCLogDebug("updated content to have offset %u", cd->offset);
+                if (cd->flags & DETECT_CONTENT_DISTANCE) {
+                    if (cd->distance >= 0) {
+                        VALIDATE((uint32_t)offset_plus_pat + cd->distance <= UINT16_MAX);
+                        offset = cd->offset = (uint16_t)(offset_plus_pat + cd->distance);
+                        SCLogDebug("distance %d: updated content to have offset %u", cd->distance,
+                                cd->offset);
+                    } else {
+                        if (abs(cd->distance) > offset_plus_pat)
+                            offset = cd->offset = 0;
+                        else
+                            offset = cd->offset = (uint16_t)(offset_plus_pat + cd->distance);
+                        offset_plus_pat = offset + cd->content_len;
+                        SCLogDebug("distance %d: updated content to have offset %u", cd->distance,
+                                cd->offset);
+                    }
                 }
                 if (has_active_depth_chain) {
                     if (offset_plus_pat && cd->flags & DETECT_CONTENT_WITHIN && cd->within >= 0) {
@@ -754,6 +762,29 @@ void DetectContentPatternPrettyPrint(const DetectContentData *cd, char *str, siz
     }
 }
 
+int DetectContentConvertToNocase(DetectEngineCtx *de_ctx, DetectContentData *cd)
+{
+    if (cd->flags & DETECT_CONTENT_NOCASE) {
+        SCLogError("can't use multiple nocase modifiers with the same content");
+        return -1;
+    }
+
+    /* for consistency in later use (e.g. by MPM construction and hashing),
+     * coerce the content string to lower-case. */
+    for (uint8_t *c = cd->content; c < cd->content + cd->content_len; c++) {
+        *c = u8_tolower(*c);
+    }
+
+    cd->flags |= DETECT_CONTENT_NOCASE;
+    /* Recreate the context with nocase chars */
+    SpmDestroyCtx(cd->spm_ctx);
+    cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 1, de_ctx->spm_global_thread_ctx);
+    if (cd->spm_ctx == NULL) {
+        return -1;
+    }
+    return 0;
+}
+
 #ifdef UNITTESTS /* UNITTESTS */
 #include "detect-engine-alert.h"
 #include "packet.h"
@@ -791,7 +822,7 @@ static bool TestLastContent(const Signature *s, uint16_t o, uint16_t d)
         snprintf(rule, sizeof(rule), "alert tcp any any -> any any (%s sid:1; rev:1;)", (sig));    \
         Signature *s = DetectEngineAppendSig(de_ctx, rule);                                        \
         FAIL_IF_NULL(s);                                                                           \
-        SigAddressPrepareStage1(de_ctx);                                                           \
+        SigPrepareStage1(de_ctx);                                                                  \
         bool res = TestLastContent(s, (o), (d));                                                   \
         FAIL_IF(res == false);                                                                     \
         DetectEngineCtxFree(de_ctx);                                                               \
@@ -1143,16 +1174,12 @@ static int DetectContentParseTest08 (void)
 static int DetectContentLongPatternMatchTest(uint8_t *raw_eth_pkt, uint16_t pktsize, const char *sig,
                       uint32_t sid)
 {
-    int result = 0;
-
     Packet *p = PacketGetFromAlloc();
-    if (unlikely(p == NULL))
-        return 0;
+    FAIL_IF_NULL(p);
     DecodeThreadVars dtv;
 
     ThreadVars th_v;
     DetectEngineThreadCtx *det_ctx = NULL;
-
     memset(&dtv, 0, sizeof(DecodeThreadVars));
     memset(&th_v, 0, sizeof(th_v));
 
@@ -1160,26 +1187,17 @@ static int DetectContentLongPatternMatchTest(uint8_t *raw_eth_pkt, uint16_t pkts
     DecodeEthernet(&th_v, &dtv, p, raw_eth_pkt, pktsize);
 
     DetectEngineCtx *de_ctx = DetectEngineCtxInit();
-    if (de_ctx == NULL) {
-        goto end;
-    }
-
+    FAIL_IF_NULL(de_ctx);
     de_ctx->flags |= DE_QUIET;
 
-    de_ctx->sig_list = SigInit(de_ctx, sig);
-    if (de_ctx->sig_list == NULL) {
-        goto end;
-    }
-    de_ctx->sig_list->next = NULL;
+    Signature *s = DetectEngineAppendSig(de_ctx, sig);
+    FAIL_IF_NULL(s);
 
     if (de_ctx->sig_list->init_data->smlists_tail[DETECT_SM_LIST_PMATCH]->type == DETECT_CONTENT) {
         DetectContentData *co = (DetectContentData *)de_ctx->sig_list->init_data
                                         ->smlists_tail[DETECT_SM_LIST_PMATCH]
                                         ->ctx;
-        if (co->flags & DETECT_CONTENT_RELATIVE_NEXT) {
-            printf("relative next flag set on final match which is content: ");
-            goto end;
-        }
+        FAIL_IF(co->flags & DETECT_CONTENT_RELATIVE_NEXT);
     }
 
     SCLogDebug("---DetectContentLongPatternMatchTest---");
@@ -1189,23 +1207,12 @@ static int DetectContentLongPatternMatchTest(uint8_t *raw_eth_pkt, uint16_t pkts
     DetectEngineThreadCtxInit(&th_v, (void *)de_ctx, (void *)&det_ctx);
 
     SigMatchSignatures(&th_v, de_ctx, det_ctx, p);
-    if (PacketAlertCheck(p, sid) != 1) {
-        goto end;
-    }
+    int result = PacketAlertCheck(p, sid);
 
-    result = 1;
-end:
-    if (de_ctx != NULL)
-    {
-        SigGroupCleanup(de_ctx);
-        SigCleanSignatures(de_ctx);
-        if (det_ctx != NULL)
-            DetectEngineThreadCtxDeinit(&th_v, (void *)det_ctx);
-        DetectEngineCtxFree(de_ctx);
-    }
+    DetectEngineThreadCtxDeinit(&th_v, (void *)det_ctx);
+    DetectEngineCtxFree(de_ctx);
     PacketRecycle(p);
     FlowShutdown();
-
     SCFree(p);
     return result;
 }

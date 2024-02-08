@@ -52,7 +52,6 @@
 #include "util-affinity.h"
 #include "flow-bypass.h"
 #include "util-dpdk-bypass.h"
-#include <rte_string_fns.h>
 
 #ifdef HAVE_DPDK
 
@@ -381,7 +380,7 @@ static char *ConfigLcoreArgValGet(void)
 
 static void ArgumentsLcoreValidate(void)
 {
-    if (threading_set_cpu_affinity == FALSE)
+    if (threading_set_cpu_affinity == false)
         FatalError("CPU affinity needs to be set");
 
     ThreadsAffinityType *mngmt_taf = GetAffinityTypeFromName("management-cpu-set");
@@ -2010,7 +2009,7 @@ static void *ParseDpdkConfigAndConfigureDevice(const char *iface)
 
     if (iconf->op_mode == DPDK_RING_MODE) {
         retval = DeviceRingsAttach(iconf);
-        if (retval != 0) {
+        if (retval == 0) {
             RunModeEnablesBypassManager();
 
             struct DPDKBypassManagerAssistantData *dpdk_vals =
@@ -2036,10 +2035,17 @@ static void *ParseDpdkConfigAndConfigureDevice(const char *iface)
 
     if (retval != 0) {
         iconf->DerefFunc(iconf);
-        retval = rte_eal_cleanup();
-        if (retval != 0)
-            SCLogError("EAL cleanup failed: %s", strerror(-retval));
-        FatalError("Device %s fails to configure", iface);
+        if (rte_eal_cleanup() != 0)
+            FatalError("EAL cleanup failed: %s", strerror(-retval));
+
+        if (retval == -ENOMEM) {
+            FatalError("%s: memory allocation failed - consider"
+                       "%s freeing up some memory.",
+                    iface,
+                    rte_eal_has_hugepages() != 0 ? " increasing the number of hugepages or" : "");
+        } else {
+            FatalError("%s: failed to configure", iface);
+        }
     }
 
     SC_ATOMIC_RESET(iconf->ref);
@@ -2162,7 +2168,6 @@ int RunModeIdsDpdkWorkers(void)
 #ifdef HAVE_DPDK
     int ret;
 
-    RunModeInitialize();
     TimeModeSetLive();
 
     InitEal();

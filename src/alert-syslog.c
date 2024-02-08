@@ -121,13 +121,12 @@ static OutputInitResult AlertSyslogInitCtx(ConfNode *conf)
 
     openlog(ident, LOG_PID|LOG_NDELAY, facility);
 
-    OutputCtx *output_ctx = SCMalloc(sizeof(OutputCtx));
+    OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
     if (unlikely(output_ctx == NULL)) {
         SCLogDebug("could not create new OutputCtx");
         LogFileFreeCtx(logfile_ctx);
         return result;
     }
-    memset(output_ctx, 0x00, sizeof(OutputCtx));
 
     output_ctx->data = logfile_ctx;
     output_ctx->DeInit = AlertSyslogDeInitCtx;
@@ -155,11 +154,9 @@ static TmEcode AlertSyslogThreadInit(ThreadVars *t, const void *initdata, void *
         return TM_ECODE_FAILED;
     }
 
-    AlertSyslogThread *ast = SCMalloc(sizeof(AlertSyslogThread));
+    AlertSyslogThread *ast = SCCalloc(1, sizeof(AlertSyslogThread));
     if (unlikely(ast == NULL))
         return TM_ECODE_FAILED;
-
-    memset(ast, 0, sizeof(AlertSyslogThread));
 
     /** Use the Output Context (file pointer and mutex) */
     ast->file_ctx = ((OutputCtx *)initdata)->data;
@@ -367,9 +364,9 @@ static TmEcode AlertSyslogDecoderEvent(ThreadVars *tv, const Packet *p, void *da
     return TM_ECODE_OK;
 }
 
-static int AlertSyslogCondition(ThreadVars *tv, void *thread_data, const Packet *p)
+static bool AlertSyslogCondition(ThreadVars *tv, void *thread_data, const Packet *p)
 {
-    return (p->alerts.cnt > 0 ? TRUE : FALSE);
+    return (p->alerts.cnt > 0);
 }
 
 static int AlertSyslogLogger(ThreadVars *tv, void *thread_data, const Packet *p)
