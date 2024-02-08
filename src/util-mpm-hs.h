@@ -27,6 +27,9 @@
 #ifndef __UTIL_MPM_HS__H__
 #define __UTIL_MPM_HS__H__
 
+#include "suricata-common.h"
+#include <stdint.h>
+
 typedef struct SCHSPattern_ {
     /* length of the pattern */
     uint16_t len;

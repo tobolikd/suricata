@@ -5,6 +5,7 @@
 #include <hs/hs_compile.h>
 #include <hs/hs_runtime.h>
 #include <stddef.h>
+#include <sys/types.h>
 
 #include "hs-prefilter.h"
 #include "prefilter.h"
@@ -27,7 +28,7 @@ int DevConfHSInit()
     // TMP*
     // change to geting it from config/suri
     const char *const *expressions;
-    const unsigned int flags = HS_FLAG_PREFILTER; // TODO* add flags
+    const unsigned int flags = HS_FLAG_PREFILTER | HS_FLAG_CASELESS;
     unsigned int match_ids;                       // TODO* array of ids for each rule
     unsigned int element_count = 1;               // TODO* count elements
 
@@ -62,6 +63,13 @@ hs_scratch_t *DevConfHSAllocScratch()
 
     // TODO* use hs_clone_scratch instead
     hs_error_t err = hs_alloc_scratch(ctx.hs_database, &scratch_space);
+    if (err) {
+        SCLogError("Failed to allocate HS scratch space");
+        goto error;
+    }
+
+    SCLogInfo("HS scratch space allocated");
+    return scratch_space;
 
 error:
     return NULL;
@@ -72,11 +80,14 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
 {
     metadata_to_suri_t *metadata_to_suri = (metadata_to_suri_t *)context;
     metadata_to_suri->detect_flags |= PREFILTER_DETECT_FLAG_MATCH;
+
+    SCLogInfo("Matched rule, id %d, from %llu, to %llu", id, from, to);
     return 0;
 }
 
 void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space)
 {
+    SCLogInfo(">>>> HSSearch <<<<");
     for (int i = 0; i < packet_buff->len; i++) {
         metadata_to_suri_t *metadata_to_suri =
                 (metadata_to_suri_t *)rte_mbuf_to_priv(packet_buff->buf[i]);

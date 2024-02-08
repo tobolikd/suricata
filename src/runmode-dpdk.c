@@ -52,6 +52,7 @@
 #include "util-affinity.h"
 #include "flow-bypass.h"
 #include "util-dpdk-bypass.h"
+#include <rte_string_fns.h>
 
 #ifdef HAVE_DPDK
 
