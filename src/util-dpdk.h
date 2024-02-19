@@ -25,6 +25,7 @@
 #define UTIL_DPDK_H
 
 #include "autoconf.h"
+#include <stdint.h>
 
 #ifdef HAVE_DPDK
 
@@ -52,7 +53,7 @@
 
 #define PREFILTER_CONF_MEMZONE_NAME "prefilter_conf"
 #define BURST_SIZE                  32
-#define RSS_HKEY_LEN 40
+#define RSS_HKEY_LEN                40
 
 #if RTE_VERSION < RTE_VERSION_NUM(22, 0, 0, 0)
 #define RTE_ETH_MQ_RX_RSS ETH_MQ_RX_RSS
@@ -80,7 +81,7 @@
 #define RTE_ETH_RX_OFFLOAD_KEEP_CRC         DEV_RX_OFFLOAD_KEEP_CRC
 #define RTE_ETH_RX_OFFLOAD_SCTP_CKSUM       DEV_RX_OFFLOAD_SCTP_CKSUM
 #define RTE_ETH_RX_OFFLOAD_OUTER_UDP_CKSUM  DEV_RX_OFFLOAD_OUTER_UDP_CKSUM
-#define RTE_ETH_RX_OFFLOAD_RSS_HASH DEV_RX_OFFLOAD_RSS_HASH
+#define RTE_ETH_RX_OFFLOAD_RSS_HASH         DEV_RX_OFFLOAD_RSS_HASH
 #define RTE_MBUF_F_FIRST_FREE               PKT_FIRST_FREE
 
 #define RTE_ETH_MQ_TX_NONE ETH_MQ_TX_NONE
@@ -152,6 +153,9 @@ enum ofldsIdxsSur { MATCH_RULES };
 
 #define MATCH_RULES_OFFLOAD(val) ((val) << MATCH_RULES)
 
+#define PREFILTER_DETECT_FLAG_MATCH (1 << 0)
+#define PREFILTER_DETECT_FLAG_RAN   (1 << 1)
+
 #define MAX_CNT_OFFLOADS       16
 #define MAX_CNT_MATCHED_RULES  32
 #define CNT_METADATA_TO_SURI   4
@@ -217,6 +221,9 @@ typedef struct MetadataToSuri {
     metadata_tcp_t metadata_tcp;
     metadata_udp_t metadata_udp;
     PacketEngineEvents events;
+#ifdef BUILD_HYPERSCAN
+    uint32_t detect_flags;
+#endif
 } metadata_to_suri_t;
 
 typedef struct MetadataToSuriHelp {

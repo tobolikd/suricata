@@ -637,6 +637,7 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
         Log().error(EINVAL, "Failed to allocate memory for scratch space");
         return NULL;
     }
+    Log().notice("ALLOCATED SCRATCH SPACE");
 #endif // BUILD_HYPERSCAN
 
     lv->state = init_vals->state;

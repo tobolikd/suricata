@@ -29,7 +29,7 @@ rings:
         entries: 65536
         cache-entries: 247
     nic-config:
-      port-pcie1: 0000:3b:00.1
+      port-pcie1: net_null0
       port-pcie2: 0000:3b:00.0
       promisc: true # promiscuous mode - capture all packets
       multicast: true # enables also detection on multicast packets

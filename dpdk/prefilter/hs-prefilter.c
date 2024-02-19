@@ -1,6 +1,6 @@
 #include "autoconf.h"
+#include "logger.h"
 #ifdef BUILD_HYPERSCAN
-
 #include <hs/hs_common.h>
 #include <hs/hs_compile.h>
 #include <hs/hs_runtime.h>
@@ -23,30 +23,37 @@ void *hs_rte_calloc(size_t size)
 
 int DevConfHSInit()
 {
-    hs_set_allocator(hs_rte_calloc, rte_free);
+    hs_error_t err = HS_SUCCESS;
+    // err = hs_set_allocator(hs_rte_calloc, rte_free);
+    if (err != HS_SUCCESS) {
+        Log().error(err, "failed to set HS allocator");
+        goto error;
+    }
 
     // TMP*
     // change to geting it from config/suri
-    const char *const *expressions;
+    const char *const *expressions = (const char *const[]){ "test" };
     const unsigned int flags = HS_FLAG_PREFILTER | HS_FLAG_CASELESS;
-    unsigned int match_ids;                       // TODO* array of ids for each rule
-    unsigned int element_count = 1;               // TODO* count elements
+    const unsigned int *match_ids =
+            (const unsigned int[]){ 5555 }; // TODO* array of ids for each rule
+    unsigned int element_count = 1;         // TODO* count elements
 
     hs_compile_error_t *compile_err = NULL;
-    hs_error_t err = HS_SUCCESS;
 
-    err = hs_compile_ext_multi(expressions, &flags, &match_ids, NULL, element_count, HS_MODE_BLOCK,
+    err = hs_compile_ext_multi(expressions, &flags, match_ids, NULL, element_count, HS_MODE_BLOCK,
             NULL, &ctx.hs_database, &compile_err);
 
     if (err != HS_SUCCESS) {
-        SCLogError("failed to compile hyperscan database");
+        Log().error(err, "failed to compile hs db");
 
         if (compile_err != NULL) {
-            SCLogError("compilation error: %s", compile_err->message);
+            Log().error(err, "compilation error: %s", compile_err->message);
             hs_free_compile_error(compile_err);
             goto error;
         }
     }
+
+    return 0;
 
 error:
     return -1;
@@ -87,7 +94,6 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
 
 void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space)
 {
-    SCLogInfo(">>>> HSSearch <<<<");
     for (int i = 0; i < packet_buff->len; i++) {
         metadata_to_suri_t *metadata_to_suri =
                 (metadata_to_suri_t *)rte_mbuf_to_priv(packet_buff->buf[i]);
