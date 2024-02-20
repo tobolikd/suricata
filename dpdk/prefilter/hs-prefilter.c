@@ -1,5 +1,6 @@
 #include "autoconf.h"
 #include "logger.h"
+#include "rte_mbuf_core.h"
 #ifdef BUILD_HYPERSCAN
 #include <hs/hs_common.h>
 #include <hs/hs_compile.h>
@@ -88,6 +89,7 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
     metadata_to_suri_t *metadata_to_suri = (metadata_to_suri_t *)context;
     metadata_to_suri->detect_flags |= PREFILTER_DETECT_FLAG_MATCH;
 
+    Log().warning(55, "Matched rule, id %d, from %llu, to %llu", id, from, to);
     SCLogInfo("Matched rule, id %d, from %llu, to %llu", id, from, to);
     return 0;
 }
@@ -98,7 +100,13 @@ void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space)
         metadata_to_suri_t *metadata_to_suri =
                 (metadata_to_suri_t *)rte_mbuf_to_priv(packet_buff->buf[i]);
         metadata_to_suri->detect_flags = PREFILTER_DETECT_FLAG_RAN;
-        hs_scan(ctx.hs_database, (char *)packet_buff->buf[i], packet_buff->len, 0, scratch_space,
+        char *pkt = rte_pktmbuf_mtod(packet_buff->buf[i], char *);
+        unsigned int len = packet_buff->buf[i]->pkt_len;
+        Log().info("scanning");
+        for (int i = 0; i < len; i++)
+            Log().info("%02x", *(pkt + i));
+        Log().info("done");
+        hs_scan(ctx.hs_database, pkt, len, 0, scratch_space,
                 MatchEventPrefilter, &metadata_to_suri);
     }
 }
