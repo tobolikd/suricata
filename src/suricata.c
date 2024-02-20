@@ -3037,10 +3037,6 @@ int SuricataMain(int argc, char **argv)
     OnNotifyRunning();
 
     PostRunStartedDetectSetup(&suricata);
-#ifdef BUILD_DPDK_APPS
-    DpdkIpcRegisterActions();
-    DpdkIpcStart();
-#endif /* BUILD_DPDK_APPS */
 
     DPDKEvaluateHugepages();
 #ifdef BUILD_DPDK_APPS
