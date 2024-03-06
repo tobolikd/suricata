@@ -1,6 +1,10 @@
 #include "autoconf.h"
 #include "logger.h"
 #include "rte_mbuf_core.h"
+#include "util-mpm-hs.h"
+#include "util-mpm.h"
+#include <stdint.h>
+#include <stdlib.h>
 #ifdef BUILD_HYPERSCAN
 #include <hs/hs_common.h>
 #include <hs/hs_compile.h>
@@ -25,12 +29,13 @@ void *hs_rte_calloc(size_t size)
 int DevConfHSInit()
 {
     hs_error_t err = HS_SUCCESS;
-    // err = hs_set_allocator(hs_rte_calloc, rte_free);
+    err = hs_set_allocator(hs_rte_calloc, rte_free);
     if (err != HS_SUCCESS) {
         Log().error(err, "failed to set HS allocator");
         goto error;
     }
 
+    /**
     // TMP*
     // change to geting it from config/suri
     const char *const *expressions = (const char *const[]){ "test" };
@@ -38,11 +43,20 @@ int DevConfHSInit()
     const unsigned int *match_ids =
             (const unsigned int[]){ 5555 }; // TODO* array of ids for each rule
     unsigned int element_count = 1;         // TODO* count elements
+    */
+    // TODO* get shared compile data
+    HSCompileData *compile_data = NULL; // InitCompileDataFromSuriMPMCtx(NULL);
+
+    // add prefilter flag for each pattern
+    for (uint32_t i = 0; i < compile_data->pattern_cnt; i++) {
+        compile_data->flags[i] |= HS_FLAG_PREFILTER;
+    }
 
     hs_compile_error_t *compile_err = NULL;
 
-    err = hs_compile_ext_multi(expressions, &flags, match_ids, NULL, element_count, HS_MODE_BLOCK,
-            NULL, &ctx.hs_database, &compile_err);
+    err = hs_compile_ext_multi((const char *const *)compile_data->expressions, compile_data->flags,
+            compile_data->ids, NULL, compile_data->pattern_cnt, HS_MODE_BLOCK, NULL,
+            &ctx.hs_database, &compile_err);
 
     if (err != HS_SUCCESS) {
         Log().error(err, "failed to compile hs db");
@@ -106,8 +120,8 @@ void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space)
         for (int i = 0; i < len; i++)
             Log().info("%02x", *(pkt + i));
         Log().info("done");
-        hs_scan(ctx.hs_database, pkt, len, 0, scratch_space,
-                MatchEventPrefilter, &metadata_to_suri);
+        hs_scan(ctx.hs_database, pkt, len, 0, scratch_space, MatchEventPrefilter,
+                &metadata_to_suri);
     }
 }
 

@@ -359,6 +359,8 @@ struct PFConfRingEntry {
 struct PFConf {
     uint32_t ring_entries_cnt;
     struct PFConfRingEntry *ring_entries;
+    uint32_t shared_mem_cnt;
+
 };
 
 enum PFMessageType {
@@ -388,6 +390,16 @@ struct DPDKFlowBypassData {
 void DPDKCloseDevice(LiveDevice *ldev);
 void DevicePostStartPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_name);
 void DevicePreStopPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_name);
+
+typedef struct HSCompileData_ {
+    unsigned int pattern_cnt;
+    unsigned int max_len;
+    unsigned int *ids;
+    unsigned int *flags;
+    char **expressions;
+} HSCompileData;
+
+HSCompileData *AllocHSCompileData(int pattern_cnt);
 
 #endif /* HAVE_DPDK */
 

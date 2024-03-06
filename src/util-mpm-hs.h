@@ -76,4 +76,13 @@ void MpmHSRegister(void);
 
 void MpmHSGlobalCleanup(void);
 
+#ifdef BUILD_DPDK_APPS
+#include "util-dpdk.h"
+#include "util-mpm.h"
+
+#define DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME "pref_compile_data_mz"
+
+HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx);
+#endif // BUILD_DPDK_APPS
+
 #endif /* __UTIL_MPM_HS__H__ */

@@ -7,6 +7,7 @@
 #ifdef BUILD_HYPERSCAN
 
 #include <hs/hs_runtime.h>
+#include "util-dpdk.h"
 
 /* compile hs db
  */
