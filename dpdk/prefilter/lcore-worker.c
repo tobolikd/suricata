@@ -107,6 +107,10 @@ int ThreadMain(void *init_values)
             ThreadSuricataOffloadsSetup(vals, lv);
             LcoreStateSet(lv->state, LCORE_OFFLOADS_DONE);
             Log().debug("Lcore %d setting up offloads finished", rte_lcore_id());
+        } else if (LcoreStateCheck(vals->state, LCORE_RULES_INIT)) {
+            Log().debug("Lcore %d setting up rules", rte_lcore_id());
+            LcoreStateSet(lv->state, LCORE_RULES_DONE);
+            Log().debug("Lcore %d setting up rules finished", rte_lcore_id());
         } else if (LcoreStateCheck(vals->state, LCORE_RUN)) {
             Log().debug("Lcore %d PKTS process", rte_lcore_id());
             ThreadSuricataRun(lv);

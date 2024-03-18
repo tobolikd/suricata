@@ -82,7 +82,7 @@ void MpmHSGlobalCleanup(void);
 
 #define DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME "pref_compile_data_mz"
 
-HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx);
+HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type);
 #endif // BUILD_DPDK_APPS
 
 #endif /* __UTIL_MPM_HS__H__ */

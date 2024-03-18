@@ -87,14 +87,24 @@ static SCMutex g_db_table_mutex = SCMUTEX_INITIALIZER;
 
 #ifdef BUILD_DPDK_APPS
 #include "util-dpdk.h"
+#include "util-dpdk-bypass.h"
 #include <rte_memzone.h>
 
-HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx)
+HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
 {
     size_t memzone_size = sizeof(HSCompileData) + sizeof(unsigned int) * 2 * mpm_ctx->pattern_cnt +
-                          sizeof(char) * mpm_ctx->pattern_cnt * mpm_ctx->maxlen;
-    const struct rte_memzone *memzone = rte_memzone_reserve(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME,
-            memzone_size, (int)rte_socket_id(), RTE_MEMZONE_2MB | RTE_MEMZONE_SIZE_HINT_ONLY);
+                          sizeof(char) * mpm_ctx->memory_size +
+                          sizeof(char *) * mpm_ctx->pattern_cnt;
+
+    SCLogInfo("Allocatign memzone of size %zu", memzone_size);
+    struct rte_mp_msg message = { 0 };
+    struct rte_mp_reply reply = { 0 };
+    strlcpy(message.name, IPC_REQUEST_MEMORY_ALLOC, RTE_MP_MAX_NAME_LEN);
+    rte_mp_sendmsg(&message);
+
+    /*const struct rte_memzone *memzone =
+            rte_memzone_reserve(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME, memzone_size,
+                    (int)rte_socket_id(), RTE_MEMZONE_2MB | RTE_MEMZONE_SIZE_HINT_ONLY);
 
     if (memzone == NULL) {
         return NULL;
@@ -103,6 +113,7 @@ HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx)
     void *memzone_pos = memzone->addr;
     HSCompileData *compile_data = memzone_pos;
     memzone_pos += sizeof(HSCompileData);
+    compile_data->type = type;
     compile_data->pattern_cnt = mpm_ctx->pattern_cnt;
     compile_data->max_len = mpm_ctx->maxlen;
     compile_data->ids = memzone_pos;
@@ -110,10 +121,8 @@ HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx)
     compile_data->flags = memzone_pos;
     memzone_pos += sizeof(unsigned int) * compile_data->pattern_cnt;
     compile_data->expressions = memzone_pos;
-
-    char(*expressions)[compile_data->max_len] =
-            (char(*)[compile_data->max_len])compile_data->expressions;
-
+    memzone_pos += sizeof(char *) * compile_data->pattern_cnt;
+    */
     SCHSCtx *mpm_context = (SCHSCtx *)mpm_ctx->ctx;
 
     for (uint32_t i = 0, p = 0; i < INIT_HASH_SIZE; i++) {
@@ -122,16 +131,20 @@ HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx)
             nnode = node->next;
             node->next = NULL;
             char *pat_tmp = HSRenderPattern(node->original_pat, node->len);
-            strcpy(expressions[p], pat_tmp);
+            SCLogInfo("Pattern: %s", pat_tmp);
+            // strcpy(memzone_pos, pat_tmp);
+            // compile_data->expressions[p] = memzone_pos;
+            // memzone_pos += strlen(pat_tmp) + 1;
             SCFree(pat_tmp);
-            compile_data->ids[p] = node->id;
-            compile_data->flags[p] = node->flags | HS_FLAG_PREFILTER;
+            // compile_data->ids[p] = node->id;
+            // compile_data->flags[p] = node->flags | HS_FLAG_PREFILTER;
             node = nnode;
             p++;
         }
     }
+    return NULL;
 
-    return compile_data;
+    // return compile_data;
 }
 #endif
 
@@ -770,6 +783,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
         goto error;
 
     SCHSFreeCompileData(cd);
+
     return 0;
 
 error:

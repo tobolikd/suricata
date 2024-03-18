@@ -1,6 +1,7 @@
 #include "autoconf.h"
 #include "logger.h"
 #include "rte_mbuf_core.h"
+#include "rte_memzone.h"
 #include "util-mpm-hs.h"
 #include "util-mpm.h"
 #include <stdint.h>
@@ -45,7 +46,14 @@ int DevConfHSInit()
     unsigned int element_count = 1;         // TODO* count elements
     */
     // TODO* get shared compile data
-    HSCompileData *compile_data = NULL; // InitCompileDataFromSuriMPMCtx(NULL);
+    const struct rte_memzone *memzone =
+            rte_memzone_lookup(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME);
+    if (memzone == NULL) {
+        Log().error(0, "Failed to lookup memzone");
+        goto error;
+    }
+
+    HSCompileData *compile_data = memzone->addr;
 
     // add prefilter flag for each pattern
     for (uint32_t i = 0; i < compile_data->pattern_cnt; i++) {
@@ -123,6 +131,20 @@ void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space)
         hs_scan(ctx.hs_database, pkt, len, 0, scratch_space, MatchEventPrefilter,
                 &metadata_to_suri);
     }
+}
+
+int IPCSetupHS(const struct rte_mp_msg *message, const void *peer)
+{
+    Log().notice("Called IPCSetupHS");
+
+    return 0;
+}
+
+int IPCAllocSharedMemory(const struct rte_mp_msg *message, const void *peer)
+{
+    Log().notice("Called IPCAllocSharedMemory");
+
+    return 0;
 }
 
 #endif // BUILD_HYPERSCAN

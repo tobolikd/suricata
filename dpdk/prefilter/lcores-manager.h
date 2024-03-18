@@ -56,7 +56,9 @@ enum LcoreStateEnum {
     LCORE_STAT_DUMP_DONE,
     LCORE_STOP_DONE,
     LCORE_OFFLOADS_INIT,
-    LCORE_OFFLOADS_DONE
+    LCORE_OFFLOADS_DONE,
+    LCORE_RULES_INIT,
+    LCORE_RULES_DONE,
 };
 
 extern struct lcore_init *LcoreMainAsWorker;

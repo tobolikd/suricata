@@ -393,6 +393,20 @@ static int IPCInit(struct action_control *actions,
         return -rte_errno;
     }
 
+    ret = rte_mp_action_register(IPC_ACTION_HYPERSCAN_SETUP, IPCSetupHS);
+    if (ret != 0) {
+        Log().warning(ENOTSUP, "Error (%s): Unable to register action (%s)",
+                rte_strerror(rte_errno), IPC_ACTION_HYPERSCAN_SETUP);
+        return -rte_errno;
+    }
+
+    ret = rte_mp_action_register(IPC_REQUEST_MEMORY_ALLOC, IPCAllocSharedMemory);
+    if (ret != 0) {
+        Log().warning(ENOTSUP, "Error (%s): Unable to register action (%s)",
+                rte_strerror(rte_errno), IPC_REQUEST_MEMORY_ALLOC);
+        return -rte_errno;
+    }
+
     return 0;
 }
 
