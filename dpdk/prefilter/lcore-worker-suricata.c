@@ -631,6 +631,7 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
     }
 
 #ifdef BUILD_HYPERSCAN
+    /* TODO*
     lv->hs_scratch_space = DevConfHSAllocScratch();
 
     if (lv->hs_scratch_space == NULL) {
@@ -638,6 +639,7 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
         return NULL;
     }
     Log().notice("ALLOCATED SCRATCH SPACE");
+    */
 #endif // BUILD_HYPERSCAN
 
     lv->state = init_vals->state;

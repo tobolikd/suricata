@@ -43,6 +43,8 @@
 #include "util-hash.h"
 #include "util-hash-lookup3.h"
 #include "util-hyperscan.h"
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include "hs_compile.h"
 #include "rte_lcore.h"
@@ -90,61 +92,174 @@ static SCMutex g_db_table_mutex = SCMUTEX_INITIALIZER;
 #include "util-dpdk-bypass.h"
 #include <rte_memzone.h>
 
-HSCompileData *InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
+static HSCompileData *compile_data_table[MPM_CTX_TYPE_SIZE] = { NULL };
+
+// meant to be used only with compile_data_table
+static int ReallocCompileData(MpmCtxType type, uint32_t pattern_cnt)
 {
-    size_t memzone_size = sizeof(HSCompileData) + sizeof(unsigned int) * 2 * mpm_ctx->pattern_cnt +
-                          sizeof(char) * mpm_ctx->memory_size +
-                          sizeof(char *) * mpm_ctx->pattern_cnt;
+    // init compile data if needed
+    if (compile_data_table[type] == NULL) {
+        compile_data_table[type] = SCCalloc(1, sizeof(HSCompileData));
+        if (compile_data_table[type] == NULL)
+            goto error;
 
-    SCLogInfo("Allocatign memzone of size %zu", memzone_size);
-    struct rte_mp_msg message = { 0 };
-    struct rte_mp_reply reply = { 0 };
-    strlcpy(message.name, IPC_REQUEST_MEMORY_ALLOC, RTE_MP_MAX_NAME_LEN);
-    rte_mp_sendmsg(&message);
-
-    /*const struct rte_memzone *memzone =
-            rte_memzone_reserve(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME, memzone_size,
-                    (int)rte_socket_id(), RTE_MEMZONE_2MB | RTE_MEMZONE_SIZE_HINT_ONLY);
-
-    if (memzone == NULL) {
-        return NULL;
+        compile_data_table[type]->type = type;
     }
 
-    void *memzone_pos = memzone->addr;
-    HSCompileData *compile_data = memzone_pos;
-    memzone_pos += sizeof(HSCompileData);
-    compile_data->type = type;
-    compile_data->pattern_cnt = mpm_ctx->pattern_cnt;
-    compile_data->max_len = mpm_ctx->maxlen;
-    compile_data->ids = memzone_pos;
-    memzone_pos += sizeof(unsigned int) * compile_data->pattern_cnt;
-    compile_data->flags = memzone_pos;
-    memzone_pos += sizeof(unsigned int) * compile_data->pattern_cnt;
-    compile_data->expressions = memzone_pos;
-    memzone_pos += sizeof(char *) * compile_data->pattern_cnt;
-    */
-    SCHSCtx *mpm_context = (SCHSCtx *)mpm_ctx->ctx;
+    HSCompileData *cd = compile_data_table[type];
 
-    for (uint32_t i = 0, p = 0; i < INIT_HASH_SIZE; i++) {
-        SCHSPattern *node = mpm_context->init_hash[i], *nnode = NULL;
+    cd->pattern_cnt += pattern_cnt;
+
+    cd->ids = SCRealloc(cd->ids, cd->pattern_cnt * sizeof(uint32_t));
+    cd->flags = SCRealloc(cd->flags, cd->pattern_cnt * sizeof(uint32_t));
+    cd->expressions = SCRealloc(cd->expressions, cd->pattern_cnt * sizeof(char *));
+
+    if (cd->ids == NULL || cd->flags == NULL || cd->expressions == NULL)
+        goto error;
+
+    return 0;
+
+error:
+    // only mem failures in this function
+    SCLogError("Failed to reallocate memory for compile data");
+    return -1;
+}
+
+int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
+{
+    int err = 0;
+
+    SCHSCtx *hs_context = (SCHSCtx *)mpm_ctx->ctx;
+    if (mpm_ctx->pattern_cnt == 0 || hs_context->init_hash == NULL) {
+        SCLogDebug("No patterns in mpm context");
+        return 0;
+    }
+
+    uint32_t orig_pattern_cnt =
+            compile_data_table[type] == NULL ? 0 : compile_data_table[type]->pattern_cnt;
+
+    err = ReallocCompileData(type, mpm_ctx->pattern_cnt);
+    if (err != 0)
+        goto error;
+
+    HSCompileData *compile_data = compile_data_table[type];
+
+    for (uint32_t i = 0, p = orig_pattern_cnt; i < INIT_HASH_SIZE; i++) {
+        SCHSPattern *node = hs_context->init_hash[i];
+        SCHSPattern *nnode = NULL;
         while (node != NULL) {
             nnode = node->next;
-            node->next = NULL;
-            char *pat_tmp = HSRenderPattern(node->original_pat, node->len);
-            SCLogInfo("Pattern: %s", pat_tmp);
-            // strcpy(memzone_pos, pat_tmp);
-            // compile_data->expressions[p] = memzone_pos;
-            // memzone_pos += strlen(pat_tmp) + 1;
-            SCFree(pat_tmp);
-            // compile_data->ids[p] = node->id;
-            // compile_data->flags[p] = node->flags | HS_FLAG_PREFILTER;
+
+            char *pattern = HSRenderPattern(node->original_pat, node->len);
+            if (pattern == NULL) {
+                SCLogError("Failed to render pattern");
+                goto error;
+            }
+            compile_data->expressions[p] = pattern;
+            compile_data->mem_size += strlen(pattern) + 1;
+            compile_data->ids[p] = node->id;
+
+            // TODO* check for all flags
+            compile_data->flags[p] = node->flags | HS_FLAG_PREFILTER;
+
             node = nnode;
             p++;
         }
     }
-    return NULL;
 
-    // return compile_data;
+    return 0;
+
+error:
+    return -1;
+}
+
+int DpdkIpcBuildHsDb(void)
+{
+    SCLogInfo("Starting sharing compile data");
+    // base size is array of HSCompileData pointers + the HSCompileData structures
+    size_t memzone_size = MPM_CTX_TYPE_SIZE * sizeof(HSCompileData *);
+
+    // compute space needed for each HSCompileData
+    // variable length data are ids, flags and expressions
+    for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+        HSCompileData *cd = compile_data_table[type];
+        if (cd == NULL)
+            continue;
+        // struct itself
+        memzone_size += sizeof(HSCompileData);
+        // ids and flags arrays
+        memzone_size += 2 * cd->pattern_cnt * sizeof(uint32_t);
+        // expressions array
+        memzone_size += cd->pattern_cnt * sizeof(char *);
+        // expressions
+        memzone_size += cd->mem_size;
+    }
+
+    SCLogInfo("Allocating memzone of size %zu", memzone_size);
+    const struct rte_memzone *memzone =
+            rte_memzone_reserve(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME, memzone_size,
+                    (int)rte_socket_id(), RTE_MEMZONE_2MB | RTE_MEMZONE_SIZE_HINT_ONLY);
+
+    if (memzone == NULL) {
+        SCLogError("Failed to allocate memzone");
+        return -1;
+    }
+
+    void *curr_pos = memzone->addr;
+
+    // begins with HSCompileData*[MPM_CTX_TYPE_MAX]
+    HSCompileData **ptr_array = curr_pos;
+    curr_pos += sizeof(HSCompileData *) * MPM_CTX_TYPE_SIZE;
+
+    // copy all compile data to memzone
+    for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+        HSCompileData *cd_orig = compile_data_table[type];
+        if (cd_orig == NULL) {
+            ptr_array[type] = NULL;
+            continue;
+        }
+
+        HSCompileData *cd_new = curr_pos;
+        curr_pos += sizeof(HSCompileData);
+        ptr_array[type] = cd_new;
+
+        cd_new->type = cd_orig->type;
+        cd_new->pattern_cnt = cd_orig->pattern_cnt;
+        cd_new->mem_size = cd_orig->mem_size;
+
+        cd_new->ids = curr_pos;
+        curr_pos += cd_orig->pattern_cnt * sizeof(uint32_t);
+        memcpy(cd_new->ids, cd_orig->ids, cd_orig->pattern_cnt * sizeof(uint32_t));
+        SCFree(cd_orig->ids);
+        cd_orig->ids = NULL;
+
+        cd_new->flags = curr_pos;
+        curr_pos += cd_orig->pattern_cnt * sizeof(uint32_t);
+        memcpy(cd_new->flags, cd_orig->flags, cd_orig->pattern_cnt * sizeof(uint32_t));
+        SCFree(cd_orig->flags);
+        cd_orig->flags = NULL;
+
+        cd_new->expressions = curr_pos;
+        curr_pos += cd_orig->pattern_cnt * sizeof(char *);
+
+        for (uint32_t i = 0; i < cd_orig->pattern_cnt; i++) {
+            char *pattern = cd_orig->expressions[i];
+            size_t len = strlen(pattern) + 1;
+
+            memcpy(curr_pos, pattern, len);
+            cd_new->expressions[i] = curr_pos;
+            curr_pos += len;
+
+            SCFree(pattern);
+            cd_orig->expressions[i] = NULL;
+        }
+
+        SCFree(cd_orig->expressions);
+        SCFree(cd_orig);
+        compile_data_table[type] = NULL;
+    }
+
+    return 0;
 }
 #endif
 

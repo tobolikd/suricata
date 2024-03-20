@@ -247,37 +247,6 @@ void DevicePreStopPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_nam
     }
 }
 
-HSCompileData *AllocHSCompileData(int pattern_cnt)
-{
-    HSCompileData *compile_data = calloc(1, sizeof(HSCompileData));
-    if (compile_data == NULL)
-        goto error;
-    compile_data->pattern_cnt = pattern_cnt;
-
-    compile_data->ids = calloc(pattern_cnt, sizeof(unsigned int));
-    if (compile_data->ids == NULL)
-        goto error;
-
-    compile_data->flags = calloc(pattern_cnt, sizeof(unsigned int));
-    if (compile_data->flags == NULL)
-        goto error;
-
-    compile_data->expressions = calloc(pattern_cnt, sizeof(char *));
-    if (compile_data->expressions == NULL)
-        goto error;
-
-    return compile_data;
-
-error:
-    if (compile_data) {
-        free(compile_data->ids);
-        free(compile_data->flags);
-        free(compile_data->expressions);
-        free(compile_data);
-    }
-    return NULL;
-}
-
 #endif /* HAVE_DPDK */
 
 #endif /* UTIL_DPDK_C */

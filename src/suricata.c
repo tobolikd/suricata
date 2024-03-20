@@ -152,6 +152,10 @@
 #include "rust.h"
 #include "util-dpdk-bypass.h"
 
+#ifdef BUILD_HYPERSCAN
+#include "util-mpm-hs.h"
+#endif // BUILD_HYPERSCAN
+
 /*
  * we put this here, because we only use it here in main.
  */
@@ -2969,23 +2973,28 @@ int SuricataMain(int argc, char **argv)
 
     LandlockSandboxing(&suricata);
 
+    SCSetStartTime(&suricata);
+    RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode, suricata.capture_plugin_name,
+            suricata.capture_plugin_args);
+    if (suricata.run_mode != RUNMODE_UNIX_SOCKET) {
+        UnixManagerThreadSpawnNonRunmode(suricata.unix_socket_enabled);
+    }
+
     PostConfLoadedDetectSetup(&suricata);
     if (suricata.run_mode == RUNMODE_ENGINE_ANALYSIS) {
         goto out;
-    } else if (suricata.run_mode == RUNMODE_CONF_TEST){
+    } else if (suricata.run_mode == RUNMODE_CONF_TEST) {
         SCLogNotice("Configuration provided was successfully loaded. Exiting.");
         goto out;
     } else if (suricata.run_mode == RUNMODE_DUMP_FEATURES) {
         FeatureDump();
         goto out;
     }
-
-    SCSetStartTime(&suricata);
-    RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode,
-            suricata.capture_plugin_name, suricata.capture_plugin_args);
-    if (suricata.run_mode != RUNMODE_UNIX_SOCKET) {
-        UnixManagerThreadSpawnNonRunmode(suricata.unix_socket_enabled);
-    }
+#ifdef BUILD_DPDK_APPS
+#ifdef BUILD_HYPERSCAN
+    DpdkIpcBuildHsDb();
+#endif // BUILD_HYPERSCAN
+#endif // BUILD_DPDK_APPS
 
     /* Wait till all the threads have been initialized */
     if (TmThreadWaitOnThreadInit() == TM_ECODE_FAILED) {

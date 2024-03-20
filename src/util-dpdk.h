@@ -396,18 +396,18 @@ typedef enum MpmCtxType_ {
     FRAME,
     PKT,
     APP,
+    MPM_CTX_TYPE_MAX = APP,
+    MPM_CTX_TYPE_SIZE = MPM_CTX_TYPE_MAX + 1,
 } MpmCtxType;
 
 typedef struct HSCompileData_ {
     MpmCtxType type;
-    unsigned int pattern_cnt;
-    unsigned int max_len;
-    unsigned int *ids;
-    unsigned int *flags;
+    uint32_t pattern_cnt;
+    uint32_t mem_size;
+    uint32_t *ids;
+    uint32_t *flags;
     char **expressions;
 } HSCompileData;
-
-HSCompileData *AllocHSCompileData(int pattern_cnt);
 
 #endif /* HAVE_DPDK */
 

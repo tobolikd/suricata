@@ -457,6 +457,7 @@ int main(int argc, char *argv[])
     Log().info("Message init done");
 
 #ifdef BUILD_HYPERSCAN
+    /* TODO*
     Log().info("HS init start");
     ret = DevConfHSInit();
     if (ret != 0) {
@@ -465,6 +466,7 @@ int main(int argc, char *argv[])
     }
 
     Log().info("Hyperscan DB compilation done");
+    */
 #endif
 
     ret = DevConfSharedConfInit();
