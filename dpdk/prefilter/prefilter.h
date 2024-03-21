@@ -42,6 +42,7 @@
 
 #ifdef BUILD_HYPERSCAN
 #include <hs/hs_common.h>
+#include "util-dpdk.h"
 #endif
 
 #define PREFILTER_CONF_MEMZONE_NAME "prefilter_conf"
@@ -101,7 +102,7 @@ struct ctx_global_resource {
     struct app_control status;
     const struct rte_memzone *shared_conf;
 #ifdef BUILD_HYPERSCAN
-    struct hs_database *hs_database;
+    struct hs_database *hs_db_table[MPM_CTX_TYPE_SIZE];
 #endif
 };
 

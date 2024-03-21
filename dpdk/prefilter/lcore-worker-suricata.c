@@ -21,6 +21,7 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
+#include "prefilter.h"
 #define PCRE2_CODE_UNIT_WIDTH 8
 #define _POSIX_C_SOURCE       200809L
 #define _DEFAULT_SOURCE       1 // for time.h
@@ -630,16 +631,24 @@ struct lcore_values *ThreadSuricataInit(struct lcore_init *init_vals)
         lv->fk_arr[i] = &lv->fke_arr.fk[i];
     }
 
-#ifdef BUILD_HYPERSCAN
-    /* TODO*
-    lv->hs_scratch_space = DevConfHSAllocScratch();
-
-    if (lv->hs_scratch_space == NULL) {
-        Log().error(EINVAL, "Failed to allocate memory for scratch space");
-        return NULL;
+    for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+        lv->hs_scratch_space[type] = NULL;
     }
-    Log().notice("ALLOCATED SCRATCH SPACE");
-    */
+
+#ifdef BUILD_HYPERSCAN
+    for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+        if (ctx.hs_db_table[type] == NULL && type != UNKNOWN) {
+            Log().notice("Hyperscan database not created for type: %d", type);
+        }
+
+        lv->hs_scratch_space[type] = DevConfHSAllocScratch(ctx.hs_db_table[type]);
+
+        if (lv->hs_scratch_space[type] == NULL) {
+            Log().error(EINVAL, "Failed to allocate memory for scratch space");
+            return NULL;
+        }
+    }
+    Log().notice("ALLOCATED SCRATCH SPACES");
 #endif // BUILD_HYPERSCAN
 
     lv->state = init_vals->state;
@@ -940,9 +949,10 @@ static void PktsEnqueue(struct lcore_values *lv)
                     lv->idxes_offlds_suri_requested);
         }
 
-        // TMP*
 #ifdef BUILD_HYPERSCAN
-        HSSearch(&lv->tmp_ring_bufs[i], lv->hs_scratch_space);
+        for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+            HSSearch(&lv->tmp_ring_bufs[i], lv->hs_scratch_space[type], type);
+        }
 #endif
 
         pkt_count = rte_ring_enqueue_burst(lv->rings_from_pf[i], (void **)lv->tmp_ring_bufs[i].buf,
@@ -1255,9 +1265,11 @@ void ThreadSuricataStatsExit(struct lcore_values *lv, struct pf_stats *stats)
 void ThreadSuricataDeinit(struct lcore_init *vals, struct lcore_values *lv)
 {
 #ifdef BUILD_HYPERSCAN
-    if (lv->hs_scratch_space != NULL) {
-        rte_free(lv->hs_scratch_space);
-        lv->hs_scratch_space = NULL;
+    for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+        if (lv->hs_scratch_space[type] != NULL) {
+            rte_free(lv->hs_scratch_space);
+            lv->hs_scratch_space[type] = NULL;
+        }
     }
 #endif
     if (vals != NULL)

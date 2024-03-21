@@ -2973,12 +2973,6 @@ int SuricataMain(int argc, char **argv)
 
     LandlockSandboxing(&suricata);
 
-    SCSetStartTime(&suricata);
-    RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode, suricata.capture_plugin_name,
-            suricata.capture_plugin_args);
-    if (suricata.run_mode != RUNMODE_UNIX_SOCKET) {
-        UnixManagerThreadSpawnNonRunmode(suricata.unix_socket_enabled);
-    }
 
     PostConfLoadedDetectSetup(&suricata);
     if (suricata.run_mode == RUNMODE_ENGINE_ANALYSIS) {
@@ -2990,11 +2984,13 @@ int SuricataMain(int argc, char **argv)
         FeatureDump();
         goto out;
     }
-#ifdef BUILD_DPDK_APPS
-#ifdef BUILD_HYPERSCAN
-    DpdkIpcBuildHsDb();
-#endif // BUILD_HYPERSCAN
-#endif // BUILD_DPDK_APPS
+
+    SCSetStartTime(&suricata);
+    RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode, suricata.capture_plugin_name,
+            suricata.capture_plugin_args);
+    if (suricata.run_mode != RUNMODE_UNIX_SOCKET) {
+        UnixManagerThreadSpawnNonRunmode(suricata.unix_socket_enabled);
+    }
 
     /* Wait till all the threads have been initialized */
     if (TmThreadWaitOnThreadInit() == TM_ECODE_FAILED) {
@@ -3050,6 +3046,9 @@ int SuricataMain(int argc, char **argv)
     DPDKEvaluateHugepages();
 #ifdef BUILD_DPDK_APPS
     DpdkIpcRegisterActions();
+#ifdef BUILD_HYPERSCAN
+    DpdkIpcBuildHsDb();
+#endif // BUILD_HYPERSCAN
     DpdkIpcStart();
 #endif /* BUILD_DPDK_APPS */
 

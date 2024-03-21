@@ -91,6 +91,7 @@ static SCMutex g_db_table_mutex = SCMUTEX_INITIALIZER;
 #include "util-dpdk.h"
 #include "util-dpdk-bypass.h"
 #include <rte_memzone.h>
+#include "rte_eal.h"
 
 static HSCompileData *compile_data_table[MPM_CTX_TYPE_SIZE] = { NULL };
 
@@ -171,6 +172,15 @@ int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
 
 error:
     return -1;
+}
+
+#include <unistd.h>
+static bool PrefilterCompiledData = false;
+static int DpdkIPCHsDbBuildCallback(
+        const struct rte_mp_msg *request, const struct rte_mp_reply *reply)
+{
+    PrefilterCompiledData = true;
+    return 0;
 }
 
 int DpdkIpcBuildHsDb(void)
@@ -258,6 +268,21 @@ int DpdkIpcBuildHsDb(void)
         SCFree(cd_orig);
         compile_data_table[type] = NULL;
     }
+
+    struct rte_mp_msg req = { 0 };
+    strlcpy(req.name, IPC_ACTION_HYPERSCAN_SETUP, RTE_MP_MAX_NAME_LEN);
+    const struct timespec ts = { .tv_sec = 15, .tv_nsec = 0 };
+    rte_mp_request_async(&req, &ts, DpdkIPCHsDbBuildCallback);
+
+    while (!PrefilterCompiledData) {
+        SCLogInfo("Prefilter not ready yet");
+        sleep(5);
+    }
+
+    SCLogInfo("Prefilter compiled HS DB");
+    rte_memzone_free(memzone);
+
+    // TODO* set state
 
     return 0;
 }

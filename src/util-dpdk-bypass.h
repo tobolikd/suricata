@@ -49,7 +49,6 @@ void DpdkIpcDetach(void);
 #define IPC_ACTION_BYPASS_TBL_DUMP_STOP  "bt_dump_stop"
 #define IPC_ACTION_OFFLOADS_SETUP        "offloads_setup"
 #define IPC_ACTION_HYPERSCAN_SETUP       "hyperscan_setup"
-#define IPC_REQUEST_MEMORY_ALLOC         "memory_alloc"
 
 struct IPCResponseAttach {
     uint32_t app_id;
