@@ -746,6 +746,7 @@ static TmEcode ReceiveDPDKLoop(ThreadVars *tv, void *data, void *slot)
             metadata_to_suri_t *metadata =
                     (metadata_to_suri_t *)rte_mbuf_to_priv(ptv->received_mbufs[i]);
             p->events = metadata->events;
+            p->dpdk_v.detect_flags = metadata->detect_flags;
 
             for (int t = 0; t < ptv->rings.cnt_offlds_suri_requested; t++) {
                 switch (ptv->rings.idxes_offlds_suri_requested[t]) {

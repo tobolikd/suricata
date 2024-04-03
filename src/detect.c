@@ -61,6 +61,7 @@
 #include "detect-flowvar.h"
 #include "detect-replace.h"
 
+#include "util-debug.h"
 #include "util-validate.h"
 #include "util-detect.h"
 #include "util-profiling.h"
@@ -136,14 +137,8 @@ static void DetectRun(ThreadVars *th_v,
         goto end;
     }
 
-#ifdef BUILD_DPDK_APPS
-    if (!(p->dpdk_v.detect_flags & PREFILTER_DETECT_FLAG_RAN)) {
-#endif
-        /* run the prefilters for packets */
-        DetectRunPrefilterPkt(th_v, de_ctx, det_ctx, p, &scratch);
-#ifdef BUILD_DPDK_APPS
-    }
-#endif
+    /* run the prefilters for packets */
+    DetectRunPrefilterPkt(th_v, de_ctx, det_ctx, p, &scratch);
 
     PACKET_PROFILING_DETECT_START(p, PROF_DETECT_RULES);
     /* inspect the rules against the packet */

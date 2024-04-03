@@ -153,9 +153,6 @@ enum ofldsIdxsSur { MATCH_RULES };
 
 #define MATCH_RULES_OFFLOAD(val) ((val) << MATCH_RULES)
 
-#define PREFILTER_DETECT_FLAG_MATCH (1 << 0)
-#define PREFILTER_DETECT_FLAG_RAN   (1 << 1)
-
 #define MAX_CNT_OFFLOADS       16
 #define MAX_CNT_MATCHED_RULES  32
 #define CNT_METADATA_TO_SURI   4
@@ -399,6 +396,8 @@ typedef enum MpmCtxType_ {
     MPM_CTX_TYPE_MAX = APP,
     MPM_CTX_TYPE_SIZE = MPM_CTX_TYPE_MAX + 1,
 } MpmCtxType;
+
+#define PREFILTER_DETECT_FLAG_RAN (1 << (MPM_CTX_TYPE_MAX + 1))
 
 typedef struct HSCompileData_ {
     MpmCtxType type;

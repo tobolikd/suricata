@@ -63,20 +63,20 @@ error:
  */
 void *hs_rte_calloc(size_t size)
 {
-    SCLogInfo("Allocating %zu for HS", size);
-    void *tmp = rte_calloc("hyperscan allocations", 1, size, 0);
-    SCLogInfo("Allocated %zu for HS", size);
-    return tmp;
+    return rte_calloc("hyperscan allocations", 1, size, 0);
 }
 
 int CompileHsDbFromShared()
 {
     hs_error_t err = HS_SUCCESS;
-    // err = hs_set_allocator(hs_rte_calloc, rte_free);
+    /* when enabled memory allocation collides with mp_malloc_sync and sending
+     * ip message to main app fails
+    err = hs_set_allocator(hs_rte_calloc, rte_free);
     if (err != HS_SUCCESS) {
         Log().error(err, "failed to set HS allocator");
         goto error;
     }
+    */
 
     const struct rte_memzone *memzone =
             rte_memzone_lookup(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME);
@@ -118,8 +118,7 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
     metadata_to_suri_t *metadata_to_suri = ctx->metadata;
     metadata_to_suri->detect_flags |= (1 << ctx->type);
 
-    Log().warning(55, "Matched rule, id %d, from %llu, to %llu", id, from, to);
-    SCLogInfo("Matched rule, id %d, from %llu, to %llu", id, from, to);
+    Log().warning(0, "Matched rule, id %d, from %llu, to %llu", id, from, to);
     return 0;
 }
 
@@ -137,8 +136,8 @@ void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space, MpmCtxType 
             .type = type,
         };
 
-        /*
         Log().info("scanning");
+        /*
         for (int i = 0; i < len; i++)
             Log().info("%02x", *(pkt + i));
         */

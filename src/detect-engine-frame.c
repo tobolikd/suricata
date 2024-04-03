@@ -36,6 +36,7 @@
 
 #include "stream-tcp.h"
 
+#include "util-debug.h"
 #include "util-profiling.h"
 #include "util-validate.h"
 #include "util-print.h"
@@ -166,6 +167,7 @@ static void PrefilterMpmFrame(DetectEngineThreadCtx *det_ctx, const void *pectx,
         // PrintRawDataFp(stdout, data, data_len);
 
         if (data != NULL && data_len >= mpm_ctx->minlen) {
+            SCLogInfo("MPM ctx type 001 %04x", mpm_ctx->type);
             (void)mpm_table[mpm_ctx->mpm_type].Search(
                     mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, data, data_len);
             SCLogDebug("det_ctx->pmq.rule_id_array_cnt %u", det_ctx->pmq.rule_id_array_cnt);
