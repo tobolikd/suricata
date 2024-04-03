@@ -21,6 +21,7 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
+#include "hs-prefilter.h"
 #define _DEFAULT_SOURCE 1 // for time.h
 #define __rtems__       1 // for time.h
 #define __USE_MISC      1 // for time.h
@@ -39,6 +40,10 @@
 #include "util-dpdk-bypass.h"
 #include "logger.h"
 #include "util-prefilter.h"
+
+#ifdef BUILD_HYPERSCAN
+#include "hs-prefilter.h"
+#endif
 
 // debug function for printing out xstats
 static void print_stats(unsigned int port_id)
@@ -107,11 +112,25 @@ int ThreadMain(void *init_values)
             ThreadSuricataOffloadsSetup(vals, lv);
             LcoreStateSet(lv->state, LCORE_OFFLOADS_DONE);
             Log().debug("Lcore %d setting up offloads finished", rte_lcore_id());
-        } else if (LcoreStateCheck(vals->state, LCORE_RULES_INIT)) {
+#ifdef BUILD_HYPERSCAN
+        } else if (LcoreStateCheck(vals->state, LCORE_HS_DB_INIT)) {
+            Log().debug("Lcore %d compiling hs database", rte_lcore_id());
+            int err = CompileHsDbFromShared();
+            if (err) {
+                Log().error(err, "Failed to compile hs db");
+                return err;
+            }
+            LcoreStateSet(lv->state, LCORE_HS_DB_DONE);
+        } else if (LcoreStateCheck(vals->state, LCORE_SCRATCH_INIT)) {
             Log().debug("Lcore %d setting up rules", rte_lcore_id());
-            //
-            LcoreStateSet(lv->state, LCORE_RULES_DONE);
+            int err = ThreadSuricataAllocScratch(lv);
+            if (err) {
+                Log().error(err, "Failed to allocate scratch space");
+                return err;
+            }
+            LcoreStateSet(lv->state, LCORE_SCRATCH_DONE);
             Log().debug("Lcore %d setting up rules finished", rte_lcore_id());
+#endif // BUILD_HYPERSCAN
         } else if (LcoreStateCheck(vals->state, LCORE_RUN)) {
             Log().debug("Lcore %d PKTS process", rte_lcore_id());
             ThreadSuricataRun(lv);

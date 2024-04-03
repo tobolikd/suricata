@@ -53,6 +53,10 @@
 #include "flow-bypass.h"
 #include "util-dpdk-bypass.h"
 
+#ifdef BUILD_HYPERSCAN
+#include "util-mpm-hs.h"
+#endif // BUILD_HYPERSCAN
+
 #ifdef HAVE_DPDK
 
 #define RSS_HKEY_LEN 40
@@ -1842,6 +1846,11 @@ static int32_t DeviceRingsAttach(DPDKIfaceConfig *iconf)
     }
 
     retval = OffloadsAgreement(iconf, pf_re, rings_cnt);
+
+#ifdef BUILD_HYPERSCAN
+    retval = DpdkIpcBuildHsDb();
+#endif // BUILD_HYPERSCAN
+
     SCReturnInt(retval);
 }
 

@@ -198,8 +198,14 @@ static int IPCActionPktsStart(const struct rte_mp_msg *msg, const void *peer)
     mp_resp.len_param = (int)strlen((char *)mp_resp.param);
 
     uint8_t tout_sec = 5;
-    // TODO*
-    ret = LcoreStateCheckAllWTimeout(LCORE_RULES_DONE, tout_sec);
+    ret = LcoreStateCheckAllWTimeout(
+#ifdef BUILD_HYPERSCAN
+            LCORE_SCRATCH_DONE
+#else
+            LCORE_OFFLOADS_DONE
+#endif
+            ,
+            tout_sec);
     if (ret != 0) {
         Log().error(ETIMEDOUT, "Workers has not initialised in time (%s sec)", tout_sec);
         exit(1);

@@ -3046,9 +3046,6 @@ int SuricataMain(int argc, char **argv)
     DPDKEvaluateHugepages();
 #ifdef BUILD_DPDK_APPS
     DpdkIpcRegisterActions();
-#ifdef BUILD_HYPERSCAN
-    DpdkIpcBuildHsDb();
-#endif // BUILD_HYPERSCAN
     DpdkIpcStart();
 #endif /* BUILD_DPDK_APPS */
 

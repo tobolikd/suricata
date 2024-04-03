@@ -81,7 +81,7 @@ struct lcore_values {
     uint16_t cnt_offlds_suri_support;
     uint16_t idxes_offlds_suri_support[MAX_CNT_OFFLOADS];
 #ifdef BUILD_HYPERSCAN
-    hs_scratch_t *hs_scratch_space[MPM_CTX_TYPE_SIZE];
+    hs_scratch_t *hs_scratch_space;
 #endif
     struct rte_table_hash *bt; // bypass table
     ring_buffer *tmp_ring_bufs;

@@ -160,8 +160,11 @@ int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
             compile_data->mem_size += strlen(pattern) + 1;
             compile_data->ids[p] = node->id;
 
-            // TODO* check for all flags
-            compile_data->flags[p] = node->flags | HS_FLAG_PREFILTER;
+            // TODO* add offset and depth flags ??
+            compile_data->flags[p] = HS_FLAG_SINGLEMATCH | HS_FLAG_PREFILTER;
+            if (node->flags & MPM_PATTERN_FLAG_NOCASE) {
+                compile_data->flags[p] |= HS_FLAG_CASELESS;
+            }
 
             node = nnode;
             p++;
@@ -172,15 +175,6 @@ int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
 
 error:
     return -1;
-}
-
-#include <unistd.h>
-static bool PrefilterCompiledData = false;
-static int DpdkIPCHsDbBuildCallback(
-        const struct rte_mp_msg *request, const struct rte_mp_reply *reply)
-{
-    PrefilterCompiledData = true;
-    return 0;
 }
 
 int DpdkIpcBuildHsDb(void)
@@ -270,21 +264,23 @@ int DpdkIpcBuildHsDb(void)
     }
 
     struct rte_mp_msg req = { 0 };
+    struct rte_mp_reply reply = { 0 };
     strlcpy(req.name, IPC_ACTION_HYPERSCAN_SETUP, RTE_MP_MAX_NAME_LEN);
-    const struct timespec ts = { .tv_sec = 15, .tv_nsec = 0 };
-    rte_mp_request_async(&req, &ts, DpdkIPCHsDbBuildCallback);
+    const struct timespec ts = { .tv_sec = 400, .tv_nsec = 0 };
+    SCLogInfo("Sending message to prefilter");
+    int ret = rte_mp_request_sync(&req, &reply, &ts);
 
-    while (!PrefilterCompiledData) {
-        SCLogInfo("Prefilter not ready yet");
-        sleep(5);
+    if (ret != 0 || reply.nb_sent != reply.nb_received || reply.msgs[0].len_param != 1 ||
+            reply.msgs[0].param[0] != 0) {
+        SCLogInfo("Failed to share compile data with prefilter");
+        ret = -1;
+    } else {
+        SCLogInfo("Prefilter compiled HS DB");
     }
 
-    SCLogInfo("Prefilter compiled HS DB");
     rte_memzone_free(memzone);
 
-    // TODO* set state
-
-    return 0;
+    return ret;
 }
 #endif
 
@@ -999,6 +995,8 @@ void SCHSInitCtx(MpmCtx *mpm_ctx)
     if (mpm_ctx->ctx == NULL) {
         exit(EXIT_FAILURE);
     }
+
+    mpm_ctx->type = UNKNOWN;
 
     mpm_ctx->memory_cnt++;
     mpm_ctx->memory_size += sizeof(SCHSCtx);

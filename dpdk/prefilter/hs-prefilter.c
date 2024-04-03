@@ -1,9 +1,11 @@
 #include "autoconf.h"
+#include "lcore-worker.h"
+#include "lcores-manager.h"
 #include "logger.h"
 #include "rte_mbuf_core.h"
 #include "rte_memzone.h"
 #include "util-mpm-hs.h"
-#include "util-mpm.h"
+#include <pthread.h>
 #include <stdlib.h>
 #ifdef BUILD_HYPERSCAN
 #include <hs/hs_common.h>
@@ -18,18 +20,59 @@
 #include "util-dpdk.h"
 #include "rte_malloc.h"
 
+// scratch space to reuse
+static hs_scratch_t *scratch_space = NULL;
+static pthread_mutex_t scratch_space_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int ThreadSuricataAllocScratch(struct lcore_values *lv)
+{
+    hs_error_t err = HS_SUCCESS;
+
+    pthread_mutex_lock(&scratch_space_mutex);
+    if (scratch_space == NULL) {
+        // if not created, allocate scratch space
+        for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+            hs_database_t *db = ctx.hs_db_table[type];
+            if (db == NULL)
+                continue;
+
+            err = hs_alloc_scratch(db, &scratch_space);
+            if (err || scratch_space == NULL) {
+                pthread_mutex_unlock(&scratch_space_mutex);
+                goto error;
+            }
+        }
+
+        lv->hs_scratch_space = scratch_space;
+        pthread_mutex_unlock(&scratch_space_mutex);
+    } else {
+        pthread_mutex_unlock(&scratch_space_mutex);
+        err = hs_clone_scratch(scratch_space, &lv->hs_scratch_space);
+        if (err || lv->hs_scratch_space == NULL)
+            goto error;
+    }
+
+    return 0;
+error:
+    Log().error(err, "failed to allocate scratch space");
+    return -1;
+}
+
 /**
  * wrapper for hyperscan malloc
  */
 void *hs_rte_calloc(size_t size)
 {
-    return rte_calloc("hyperscan allocations", 1, size, 0);
+    SCLogInfo("Allocating %zu for HS", size);
+    void *tmp = rte_calloc("hyperscan allocations", 1, size, 0);
+    SCLogInfo("Allocated %zu for HS", size);
+    return tmp;
 }
 
 int CompileHsDbFromShared()
 {
     hs_error_t err = HS_SUCCESS;
-    err = hs_set_allocator(hs_rte_calloc, rte_free);
+    // err = hs_set_allocator(hs_rte_calloc, rte_free);
     if (err != HS_SUCCESS) {
         Log().error(err, "failed to set HS allocator");
         goto error;
@@ -42,49 +85,30 @@ int CompileHsDbFromShared()
         goto error;
     }
 
-    HSCompileData **compile_data = memzone->addr;
+    HSCompileData **compile_data_arr = memzone->addr;
 
     for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
-        HSCompileData *cd = compile_data[type];
+        HSCompileData *cd = compile_data_arr[type];
         if (cd == NULL)
             continue;
-        hs_compile_error_t *compile_err = NULL;
 
+        hs_compile_error_t *compile_err = NULL;
         err = hs_compile_ext_multi((const char *const *)cd->expressions, cd->flags, cd->ids, NULL,
                 cd->pattern_cnt, HS_MODE_BLOCK, NULL, &ctx.hs_db_table[type], &compile_err);
 
         if (err != HS_SUCCESS) {
-            Log().error(err, "failed to compile hs db");
-
             if (compile_err != NULL) {
                 Log().error(err, "compilation error: %s", compile_err->message);
                 hs_free_compile_error(compile_err);
-                goto error;
             }
-        }
-
-        if (err != HS_SUCCESS)
             goto error;
+        }
     }
 
     return 0;
 
 error:
     return -1;
-}
-
-hs_scratch_t *DevConfHSAllocScratch(struct hs_database *db)
-{
-    hs_scratch_t *scratch_space = NULL;
-
-    hs_error_t err = hs_alloc_scratch(db, &scratch_space);
-    if (err != HS_SUCCESS) {
-        SCLogError("Failed to allocate HS scratch space");
-        return NULL;
-    }
-
-    SCLogInfo("HS scratch space allocated");
-    return scratch_space;
 }
 
 int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long long to,
@@ -130,7 +154,47 @@ int IPCSetupHS(const struct rte_mp_msg *message, const void *peer)
     uint8_t err = 0;
     Log().notice("Called IPCSetupHS");
 
+    /*
     err = CompileHsDbFromShared();
+    if (err) {
+        Log().error(err, "Failed to compile hs db");
+        goto finish;
+    }
+    */
+
+    uint16_t timeout_sec = 5;
+    err = LcoreStateCheckAllWTimeout(LCORE_OFFLOADS_DONE, timeout_sec);
+    if (err) {
+        Log().error(err, "Workers haven't finished offloads setup");
+        goto finish;
+    }
+
+    if (ctx.lcores_state.lcores_arr_len < 1) {
+        Log().error(err, "Lcores array not initialized");
+        err = -1;
+        goto finish;
+    }
+
+    // assign first thread to init the hs db
+    rte_atomic16_t **state = &ctx.lcores_state.lcores_arr[0].state;
+    LcoreStateSet(*state, LCORE_HS_DB_INIT);
+    timeout_sec = 300;
+    LcoreStateWaitWithTimeout(*state, LCORE_HS_DB_DONE, timeout_sec);
+
+    for (uint16_t i = 0; i < ctx.lcores_state.lcores_arr_len; i++) {
+        LcoreStateSet(ctx.lcores_state.lcores_arr[i].state, LCORE_SCRATCH_INIT);
+    }
+
+    timeout_sec = 10;
+    err = LcoreStateCheckAllWTimeout(LCORE_SCRATCH_DONE, timeout_sec);
+    if (err) {
+        Log().error(err, "Scratch space init not done in %s sec", timeout_sec);
+        goto finish;
+    }
+
+    Log().notice("Compiled HS databases");
+
+finish:
 
     struct rte_mp_msg reply = { 0 };
     strlcpy(reply.name, message->name, sizeof(reply.name));
@@ -138,9 +202,7 @@ int IPCSetupHS(const struct rte_mp_msg *message, const void *peer)
     reply.len_param = 1;
     rte_mp_reply(&reply, peer);
 
-    Log().notice("Compiled HS databases");
-
-    return 0;
+    return err;
 }
 
 #endif // BUILD_HYPERSCAN
