@@ -34,6 +34,7 @@
 
 #include "rust.h"
 
+#include "util-debug.h"
 #include "util-misc.h"
 #include "util-mpm.h"
 #include "util-validate.h"

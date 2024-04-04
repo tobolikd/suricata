@@ -128,6 +128,11 @@ error:
 
 int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
 {
+    if (type == UNKNOWN) {
+        SCLogInfo("Unknown ctx supplied");
+        return 0;
+    }
+    SCLogInfo("Preparing %p with type %d", mpm_ctx, type);
     int err = 0;
     mpm_ctx->type = type;
 
@@ -997,6 +1002,8 @@ void SCHSInitCtx(MpmCtx *mpm_ctx)
         exit(EXIT_FAILURE);
     }
 
+    SCLogInfo("Initctx - %p", mpm_ctx);
+
     mpm_ctx->type = UNKNOWN;
 
     mpm_ctx->memory_cnt++;
@@ -1113,7 +1120,7 @@ static int SCHSMatchEvent(unsigned int id, unsigned long long from, unsigned lon
 uint32_t SCHSSearch(const MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx, PrefilterRuleStore *pmq,
         const uint8_t *buf, const uint32_t buflen)
 {
-    SCLogInfo("HS SEARCH mpm type %04x", mpm_ctx->type);
+    SCLogInfo("HS SEARCH mpm %p type %04x", mpm_ctx, mpm_ctx->type);
     uint32_t ret = 0;
     SCHSCtx *ctx = (SCHSCtx *)mpm_ctx->ctx;
     SCHSThreadCtx *hs_thread_ctx = (SCHSThreadCtx *)(mpm_thread_ctx->ctx);

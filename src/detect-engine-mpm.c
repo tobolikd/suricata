@@ -64,6 +64,7 @@
 #include "util-print.h"
 #include "util-validate.h"
 #include "util-hash-string.h"
+#include "util-dpdk.h"
 
 const char *builtin_mpms[] = { "toserver TCP packet", "toclient TCP packet", "toserver TCP stream",
     "toclient TCP stream", "toserver UDP packet", "toclient UDP packet", "other IP packet",
@@ -263,7 +264,7 @@ int DetectMpmPrepareAppMpms(DetectEngineCtx *de_ctx)
                 if (mpm_table[de_ctx->mpm_matcher].Prepare != NULL) {
 #ifdef BUILD_DPDK_APPS
 #ifdef BUILD_HYPERSCAN
-                    InitCompileDataForDPDKPrefilter(mpm_ctx, APP);
+                    // InitCompileDataForDPDKPrefilter(mpm_ctx, APP);
 #endif // BUILD_HYPERSCAN
 #endif // BUILD_DPDK_APPS
                     r |= mpm_table[de_ctx->mpm_matcher].Prepare(mpm_ctx);
@@ -497,7 +498,7 @@ int DetectMpmPrepareFrameMpms(DetectEngineCtx *de_ctx)
                 if (mpm_table[de_ctx->mpm_matcher].Prepare != NULL) {
 #ifdef BUILD_DPDK_APPS
 #ifdef BUILD_HYPERSCAN
-                    InitCompileDataForDPDKPrefilter(mpm_ctx, FRAME);
+                    // InitCompileDataForDPDKPrefilter(mpm_ctx, FRAME);
 #endif // BUILD_HYPERSCAN
 #endif // BUILD_DPDK_APPS
                     r |= mpm_table[de_ctx->mpm_matcher].Prepare(mpm_ctx);
@@ -663,7 +664,7 @@ int DetectMpmPreparePktMpms(DetectEngineCtx *de_ctx)
                 if (mpm_table[de_ctx->mpm_matcher].Prepare != NULL) {
 #ifdef BUILD_DPDK_APPS
 #ifdef BUILD_HYPERSCAN
-                    InitCompileDataForDPDKPrefilter(mpm_ctx, PKT);
+                    // InitCompileDataForDPDKPrefilter(mpm_ctx, PKT);
 #endif // BUILD_HYPERSCAN
 #endif // BUILD_DPDK_APPS
                     r |= mpm_table[de_ctx->mpm_matcher].Prepare(mpm_ctx);
@@ -1546,6 +1547,7 @@ static void MpmStoreSetup(const DetectEngineCtx *de_ctx, MpmStore *ms)
         return;
     }
 
+    SCLogInfo("InitCtx mpmstoresetup");
     MpmInitCtx(ms->mpm_ctx, de_ctx->mpm_matcher);
 
     /* add the patterns */
@@ -1582,6 +1584,7 @@ static void MpmStoreSetup(const DetectEngineCtx *de_ctx, MpmStore *ms)
         MpmFactoryReClaimMpmCtx(de_ctx, ms->mpm_ctx);
         ms->mpm_ctx = NULL;
     } else {
+        InitCompileDataForDPDKPrefilter(ms->mpm_ctx, ms->type);
         if (ms->sgh_mpm_context == MPM_CTX_FACTORY_UNIQUE_CONTEXT) {
             if (mpm_table[ms->mpm_ctx->mpm_type].Prepare != NULL) {
                 mpm_table[ms->mpm_ctx->mpm_type].Prepare(ms->mpm_ctx);
@@ -1695,7 +1698,7 @@ MpmStore *MpmStorePrepareBuffer(
     if (cnt == 0)
         return NULL;
 
-    MpmStore lookup = { sids_array, max_sid, direction, buf, sm_list, 0, 0, NULL };
+    MpmStore lookup = { sids_array, max_sid, direction, buf, sm_list, 0, 0, UNKNOWN, NULL };
 
     MpmStore *result = MpmStoreLookup(de_ctx, &lookup);
     if (result == NULL) {
@@ -1715,6 +1718,7 @@ MpmStore *MpmStorePrepareBuffer(
         copy->direction = direction;
         copy->sm_list = sm_list;
         copy->sgh_mpm_context = sgh_mpm_context;
+        copy->type = BUILTIN;
 
         MpmStoreSetup(de_ctx, copy);
         MpmStoreAdd(de_ctx, copy);
@@ -1743,7 +1747,7 @@ static MpmStore *MpmStorePrepareBufferAppLayer(DetectEngineCtx *de_ctx, SigGroup
             am->direction == SIG_FLAG_TOSERVER ? "toserver" : "toclient", am->sm_list);
 
     MpmStore lookup = { sa->sids_array, sa->sids_array_size, am->direction, MPMB_MAX, am->sm_list,
-        0, am->app_v2.alproto, NULL };
+        0, am->app_v2.alproto, UNKNOWN, NULL };
     SCLogDebug("am->direction %d am->sm_list %d sgh_mpm_context %d", am->direction, am->sm_list,
             am->sgh_mpm_context);
 
@@ -1769,6 +1773,7 @@ static MpmStore *MpmStorePrepareBufferAppLayer(DetectEngineCtx *de_ctx, SigGroup
         copy->sm_list = am->sm_list;
         copy->sgh_mpm_context = am->sgh_mpm_context;
         copy->alproto = am->app_v2.alproto;
+        copy->type = APP;
 
         MpmStoreSetup(de_ctx, copy);
         MpmStoreAdd(de_ctx, copy);
@@ -1789,7 +1794,7 @@ static MpmStore *MpmStorePrepareBufferPkt(DetectEngineCtx *de_ctx, SigGroupHead 
         return NULL;
 
     MpmStore lookup = { sa->sids_array, sa->sids_array_size, SIG_FLAG_TOSERVER | SIG_FLAG_TOCLIENT,
-        MPMB_MAX, am->sm_list, 0, 0, NULL };
+        MPMB_MAX, am->sm_list, 0, 0, UNKNOWN, NULL };
     SCLogDebug("am->sm_list %d", am->sm_list);
 
     MpmStore *result = MpmStoreLookup(de_ctx, &lookup);
@@ -1812,6 +1817,7 @@ static MpmStore *MpmStorePrepareBufferPkt(DetectEngineCtx *de_ctx, SigGroupHead 
         copy->direction = SIG_FLAG_TOSERVER | SIG_FLAG_TOCLIENT;
         copy->sm_list = am->sm_list;
         copy->sgh_mpm_context = am->sgh_mpm_context;
+        copy->type = PKT;
 
         MpmStoreSetup(de_ctx, copy);
         MpmStoreAdd(de_ctx, copy);
@@ -1832,7 +1838,7 @@ static MpmStore *MpmStorePrepareBufferFrame(DetectEngineCtx *de_ctx, SigGroupHea
         return NULL;
 
     MpmStore lookup = { sa->sids_array, sa->sids_array_size, am->direction, MPMB_MAX, am->sm_list,
-        0, am->frame_v1.alproto, NULL };
+        0, am->frame_v1.alproto, UNKNOWN, NULL };
     SCLogDebug("am->sm_list %d", am->sm_list);
 
     MpmStore *result = MpmStoreLookup(de_ctx, &lookup);
@@ -1856,6 +1862,7 @@ static MpmStore *MpmStorePrepareBufferFrame(DetectEngineCtx *de_ctx, SigGroupHea
         copy->sm_list = am->sm_list;
         copy->sgh_mpm_context = am->sgh_mpm_context;
         copy->alproto = am->frame_v1.alproto;
+        copy->type = FRAME;
 
         MpmStoreSetup(de_ctx, copy);
         MpmStoreAdd(de_ctx, copy);

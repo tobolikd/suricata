@@ -127,7 +127,7 @@ void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space, MpmCtxType 
     for (int i = 0; i < packet_buff->len; i++) {
         metadata_to_suri_t *metadata_to_suri =
                 (metadata_to_suri_t *)rte_mbuf_to_priv(packet_buff->buf[i]);
-        metadata_to_suri->detect_flags = PREFILTER_DETECT_FLAG_RAN;
+        metadata_to_suri->detect_flags |= PREFILTER_DETECT_FLAG_RAN;
         char *pkt = rte_pktmbuf_mtod(packet_buff->buf[i], char *);
         unsigned int len = packet_buff->buf[i]->pkt_len;
 

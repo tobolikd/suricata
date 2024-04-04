@@ -40,6 +40,7 @@
 #include "util-radix-tree.h"
 #include "util-file.h"
 #include "reputation.h"
+#include <suricata/util-dpdk.h>
 
 #define DETECT_MAX_RULE_SIZE 8192
 
@@ -1342,6 +1343,7 @@ typedef struct MpmStore_ {
     int sm_list;
     int32_t sgh_mpm_context;
     AppProto alproto;
+    MpmCtxType type;
     MpmCtx *mpm_ctx;
 
 } MpmStore;
