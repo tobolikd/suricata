@@ -154,6 +154,8 @@ int IPCSetupHS(const struct rte_mp_msg *message, const void *peer)
     uint8_t err = 0;
     Log().notice("Called IPCSetupHS");
 
+    struct rte_mp_msg reply = { 0 };
+    strlcpy(reply.name, message->name, sizeof(reply.name));
     /*
     err = CompileHsDbFromShared();
     if (err) {
@@ -195,9 +197,6 @@ int IPCSetupHS(const struct rte_mp_msg *message, const void *peer)
     Log().notice("Compiled HS databases");
 
 finish:
-
-    struct rte_mp_msg reply = { 0 };
-    strlcpy(reply.name, message->name, sizeof(reply.name));
     reply.param[0] = err;
     reply.len_param = 1;
     // rte_mp_reply(&reply, peer);
