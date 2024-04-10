@@ -2,6 +2,7 @@
 #include "lcore-worker.h"
 #include "lcores-manager.h"
 #include "logger.h"
+#include "rte_eal.h"
 #include "rte_mbuf_core.h"
 #include "rte_memzone.h"
 #include "util-mpm-hs.h"
@@ -71,12 +72,12 @@ int CompileHsDbFromShared()
     hs_error_t err = HS_SUCCESS;
     /* when enabled memory allocation collides with mp_malloc_sync and sending
      * ip message to main app fails
-    err = hs_set_allocator(hs_rte_calloc, rte_free);
+    */
+    // err = hs_set_allocator(hs_rte_calloc, rte_free);
     if (err != HS_SUCCESS) {
         Log().error(err, "failed to set HS allocator");
         goto error;
     }
-    */
 
     const struct rte_memzone *memzone =
             rte_memzone_lookup(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME);
@@ -199,7 +200,8 @@ finish:
     strlcpy(reply.name, message->name, sizeof(reply.name));
     reply.param[0] = err;
     reply.len_param = 1;
-    rte_mp_reply(&reply, peer);
+    // rte_mp_reply(&reply, peer);
+    rte_mp_sendmsg(&reply);
 
     return err;
 }

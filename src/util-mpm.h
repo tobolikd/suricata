@@ -26,7 +26,7 @@
 
 #include "app-layer-protos.h"
 #include "util-prefilter.h"
-#include <suricata/util-dpdk.h>
+#include "util-dpdk.h"
 
 #define MPM_INIT_HASH_SIZE 65536
 

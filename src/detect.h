@@ -40,7 +40,7 @@
 #include "util-radix-tree.h"
 #include "util-file.h"
 #include "reputation.h"
-#include <suricata/util-dpdk.h>
+#include "util-dpdk.h"
 
 #define DETECT_MAX_RULE_SIZE 8192
 
