@@ -184,12 +184,6 @@ error:
     return -1;
 }
 
-static int state = 0;
-int IPCCallback(const struct rte_mp_msg *msg, const void *peer)
-{
-    state = 1;
-}
-
 int DpdkIpcBuildHsDb(void)
 {
     SCLogInfo("Starting sharing compile data");
@@ -276,29 +270,13 @@ int DpdkIpcBuildHsDb(void)
         compile_data_table[type] = NULL;
     }
 
-    rte_mp_action_register("abcde", IPCCallback);
-
     struct rte_mp_msg req = { 0 };
-    // struct rte_mp_reply reply = { 0 };
+     struct rte_mp_reply reply = { 0 };
     strlcpy(req.name, IPC_ACTION_HYPERSCAN_SETUP, RTE_MP_MAX_NAME_LEN);
     const struct timespec ts = { .tv_sec = 400, .tv_nsec = 0 };
     SCLogInfo("Sending message to prefilter");
-    int ret = 0;
-    // int ret = rte_mp_request_sync(&req, &reply, &ts);
-    rte_mp_sendmsg(&req);
+    int ret = rte_mp_request_sync(&req, &reply, &ts);
 
-    int cnt = 5;
-    while (cnt > 0) {
-        if (state == 1) {
-            SCLogInfo("Prefilter not ready");
-            break;
-        }
-
-        SCLogInfo("Prefilter not ready");
-        sleep(5);
-    }
-
-    /*
     if (ret != 0 || reply.nb_sent != reply.nb_received || reply.msgs[0].len_param != 1 ||
             reply.msgs[0].param[0] != 0) {
         SCLogInfo("Failed to share compile data with prefilter");
@@ -306,7 +284,6 @@ int DpdkIpcBuildHsDb(void)
     } else {
         SCLogInfo("Prefilter compiled HS DB");
     }
-    */
 
     SCLogInfo("Prefilter compiled HS DB");
     rte_memzone_free(memzone);
