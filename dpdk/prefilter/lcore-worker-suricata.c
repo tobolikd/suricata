@@ -22,6 +22,7 @@
  */
 
 #include "prefilter.h"
+#include <stdio.h>
 #define PCRE2_CODE_UNIT_WIDTH 8
 #define _POSIX_C_SOURCE       200809L
 #define _DEFAULT_SOURCE       1 // for time.h
@@ -1086,6 +1087,7 @@ void ThreadSuricataRun(struct lcore_values *lv)
     Log().notice("Lcore %u receiving from %s (p%d)", lv->qid, lv->port1_addr, lv->port1_id);
     if (lv->opmode != IDS)
         Log().notice("Lcore %u receiving from %s (p%d)", lv->qid, lv->port2_addr, lv->port2_id);
+    fflush(stdout);
 
     LcoreStateSet(lv->state, LCORE_RUNNING);
 
