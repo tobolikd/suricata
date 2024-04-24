@@ -29,6 +29,7 @@
 #define _DEFAULT_SOURCE 1
 
 #include <sys/time.h>
+#include <time.h>
 
 #include <rte_eal.h>
 #include <rte_atomic.h>

@@ -21,8 +21,6 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
-#include "prefilter.h"
-#include <stdio.h>
 #define PCRE2_CODE_UNIT_WIDTH 8
 #define _POSIX_C_SOURCE       200809L
 #define _DEFAULT_SOURCE       1 // for time.h
@@ -56,6 +54,9 @@
 #include "runmode-dpdk.h"
 #include "source-dpdk.h"
 #include "metadata.h"
+
+#include "prefilter.h"
+#include <stdio.h>
 
 #ifdef BUILD_HYPERSCAN
 #include <hs/hs_runtime.h>
