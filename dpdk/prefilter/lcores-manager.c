@@ -37,6 +37,7 @@
 #include "dev-conf.h"
 #include "logger.h"
 #include "util-prefilter.h"
+#include "prefilter.h"
 
 struct lcore_init *LcoreMainAsWorker = NULL;
 
