@@ -21,7 +21,6 @@
  * \author Lukas Sismis <lukas.sismis@cesnet.cz>
  */
 
-#include <stdio.h>
 #define _DEFAULT_SOURCE 1 // for time.h
 #define __rtems__       1 // for time.h
 #define __USE_MISC      1 // for time.h
@@ -65,7 +64,6 @@ void PFStatsExitLog(struct pf_stats *s)
             rte_atomic64_read(&s->p1_tx));
     Log().notice("APP PORT2 rx: %lu tx: %lu", rte_atomic64_read(&s->p2_rx),
             rte_atomic64_read(&s->p2_tx));
-    fflush(stdout);
 
     Log().notice("APP PKTS: rx: %lu, "
                  "inspected %lu, bypassed %lu, "
