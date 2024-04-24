@@ -1718,7 +1718,10 @@ MpmStore *MpmStorePrepareBuffer(
         copy->direction = direction;
         copy->sm_list = sm_list;
         copy->sgh_mpm_context = sgh_mpm_context;
-        copy->type = BUILTIN;
+        if (buf == MPMB_TCP_PKT_TS || buf == MPMB_TCP_PKT_TC || buf == MPMB_UDP_TS ||
+                buf == MPMB_UDP_TC || buf == MPMB_OTHERIP) {
+            copy->type = PAYLOAD;
+        }
 
         MpmStoreSetup(de_ctx, copy);
         MpmStoreAdd(de_ctx, copy);
@@ -1773,7 +1776,6 @@ static MpmStore *MpmStorePrepareBufferAppLayer(DetectEngineCtx *de_ctx, SigGroup
         copy->sm_list = am->sm_list;
         copy->sgh_mpm_context = am->sgh_mpm_context;
         copy->alproto = am->app_v2.alproto;
-        copy->type = APP;
 
         MpmStoreSetup(de_ctx, copy);
         MpmStoreAdd(de_ctx, copy);
@@ -1862,7 +1864,6 @@ static MpmStore *MpmStorePrepareBufferFrame(DetectEngineCtx *de_ctx, SigGroupHea
         copy->sm_list = am->sm_list;
         copy->sgh_mpm_context = am->sgh_mpm_context;
         copy->alproto = am->frame_v1.alproto;
-        copy->type = FRAME;
 
         MpmStoreSetup(de_ctx, copy);
         MpmStoreAdd(de_ctx, copy);
