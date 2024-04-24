@@ -27,8 +27,6 @@
 #include <sys/queue.h>
 #include <stdint.h>
 
-#include "prefilter.h"
-
 typedef int (*start_ring)(void *ring_conf);
 typedef int (*stop_ring)(void *ring_conf);
 
