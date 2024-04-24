@@ -792,14 +792,10 @@ static void PrefilterMpmPkt(DetectEngineThreadCtx *det_ctx,
 
 #ifdef BUILD_DPDK_APPS
     // packet checked in dpdk prefilter
-    SCLogInfo("in PKT !!!!!!!!!!!!!!!");
     if (p->dpdk_v.detect_flags & PREFILTER_DETECT_FLAG_RAN) {
-        SCLogInfo("Pkt checked");
         if (!((1 << mpm_ctx->type) & p->dpdk_v.detect_flags)) {
-            SCLogInfo("Packet marked as safe in DPDK prefilter");
+            SCLogInfo("Packet marked as safe in DPDK prefilter (pkt)");
             SCReturn;
-        } else {
-            SCLogInfo("Packet marked for further inspection in DPDK prefilter");
         }
     }
 #endif
