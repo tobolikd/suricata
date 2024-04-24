@@ -29,7 +29,6 @@
 #define _DEFAULT_SOURCE 1
 
 #include <sys/time.h>
-#include <time.h>
 
 #include <rte_eal.h>
 #include <rte_atomic.h>
@@ -37,7 +36,6 @@
 #include <rte_mempool.h>
 #include <rte_hash.h>
 
-#include "dev-conf.h"
 #include "hash-table-bypass.h"
 
 #ifdef BUILD_HYPERSCAN

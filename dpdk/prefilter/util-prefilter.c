@@ -33,7 +33,6 @@
 
 #include <rte_eal.h>
 
-#include "prefilter.h"
 #include "logger.h"
 #include "lcores-manager.h"
 #include "util-prefilter.h"
