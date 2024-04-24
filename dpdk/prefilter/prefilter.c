@@ -45,6 +45,7 @@
 
 #ifdef BUILD_HYPERSCAN
 #include "hs-prefilter.h"
+#include "util-dpdk.h"
 #endif
 
 struct prefilter_args {
