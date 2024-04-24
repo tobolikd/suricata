@@ -50,6 +50,7 @@
 #include "util-dpdk-bypass.h"
 #include "lcores-manager.h"
 #include "lcore-worker.h"
+#include "prefilter.h"
 
 struct DeviceConfigurer devconf;
 ring_tailq_t tailq_ring_head = TAILQ_HEAD_INITIALIZER(tailq_ring_head);
