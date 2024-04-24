@@ -171,7 +171,7 @@ int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
             compile_data->expressions[p] = pattern;
             compile_data->mem_size += strlen(pattern) + 1;
             // set all ids to be the same
-            compile_data->ids[p] = 0;
+            compile_data->ids[p] = node->id;
 
             compile_data->flags[p] = HS_FLAG_SINGLEMATCH | HS_FLAG_PREFILTER;
             if (node->flags & MPM_PATTERN_FLAG_NOCASE) {
