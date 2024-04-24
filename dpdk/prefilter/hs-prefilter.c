@@ -119,7 +119,7 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
     metadata_to_suri_t *metadata_to_suri = ctx->metadata;
     metadata_to_suri->detect_flags |= (1 << ctx->type);
 
-    Log().warning(0, "Matched rule, id %d, from %llu, to %llu", id, from, to);
+    Log().debug(0, "Matched rule, id %d, from %llu, to %llu", id, from, to);
     return 0;
 }
 
@@ -137,15 +137,7 @@ void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space, MpmCtxType 
             .type = type,
         };
 
-        Log().info("scanning");
-        /*
-        for (int i = 0; i < len; i++)
-            Log().info("%02x", *(pkt + i));
-        */
-
         hs_scan(ctx.hs_db_table[type], pkt, len, 0, scratch_space, MatchEventPrefilter, &context);
-
-        // Log().info("done");
     }
 }
 

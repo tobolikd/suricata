@@ -732,7 +732,6 @@ static void PrefilterMpm(DetectEngineThreadCtx *det_ctx, const void *pectx, Pack
     //PrintRawDataFp(stdout, data, data_len);
 
     if (data != NULL && data_len >= mpm_ctx->minlen) {
-        SCLogInfo("Mpm ctx type 002 %04x", mpm_ctx->type);
         (void)mpm_table[mpm_ctx->mpm_type].Search(
                 mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, data, data_len);
         PREFILTER_PROFILING_ADD_BYTES(det_ctx, data_len);
@@ -817,7 +816,6 @@ static void PrefilterMpmPkt(DetectEngineThreadCtx *det_ctx,
     //PrintRawDataFp(stdout, data, data_len);
 
     if (data != NULL && data_len >= mpm_ctx->minlen) {
-        SCLogInfo("Mpm ctx type 003 %04x", mpm_ctx->type);
         (void)mpm_table[mpm_ctx->mpm_type].Search(
                 mpm_ctx, &det_ctx->mtc, &det_ctx->pmq, data, data_len);
         PREFILTER_PROFILING_ADD_BYTES(det_ctx, data_len);

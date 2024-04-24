@@ -1121,7 +1121,6 @@ static int SCHSMatchEvent(unsigned int id, unsigned long long from, unsigned lon
 uint32_t SCHSSearch(const MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx, PrefilterRuleStore *pmq,
         const uint8_t *buf, const uint32_t buflen)
 {
-    SCLogInfo("HS SEARCH mpm %p type %04x", mpm_ctx, mpm_ctx->type);
     uint32_t ret = 0;
     SCHSCtx *ctx = (SCHSCtx *)mpm_ctx->ctx;
     SCHSThreadCtx *hs_thread_ctx = (SCHSThreadCtx *)(mpm_thread_ctx->ctx);
