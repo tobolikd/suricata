@@ -44,8 +44,8 @@
 #include "stats.h"
 
 #ifdef BUILD_HYPERSCAN
-#include "hs-prefilter.h"
 #include "util-dpdk.h"
+#include "hs-prefilter.h"
 #endif
 
 struct prefilter_args {
@@ -401,12 +401,14 @@ static int IPCInit(struct action_control *actions,
         return -rte_errno;
     }
 
+#ifdef BUILD_HYPERSCAN
     ret = rte_mp_action_register(IPC_ACTION_HYPERSCAN_SETUP, IPCSetupHS);
     if (ret != 0) {
         Log().warning(ENOTSUP, "Error (%s): Unable to register action (%s)",
                 rte_strerror(rte_errno), IPC_ACTION_HYPERSCAN_SETUP);
         return -rte_errno;
     }
+#endif
 
     return 0;
 }
