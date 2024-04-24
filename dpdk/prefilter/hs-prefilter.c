@@ -89,16 +89,19 @@ int CompileHsDbFromShared()
     HSCompileData **compile_data_arr = memzone->addr;
 
     for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
+        Log().info("TYPE %d", type);
         HSCompileData *cd = compile_data_arr[type];
         if (cd == NULL)
             continue;
 
+        Log().info("compiling db", type);
         hs_compile_error_t *compile_err = NULL;
-        err = hs_compile_ext_multi((const char *const *)cd->expressions, cd->flags, cd->ids, NULL,
+        err = hs_compile_ext_multi((const char *const *)cd->expressions, cd->flags, NULL, NULL,
                 cd->pattern_cnt, HS_MODE_BLOCK, NULL, &ctx.hs_db_table[type], &compile_err);
 
         if (err != HS_SUCCESS) {
             if (compile_err != NULL) {
+                Log().error(err, "compilation error:");
                 Log().error(err, "compilation error: %s", compile_err->message);
                 hs_free_compile_error(compile_err);
             }
