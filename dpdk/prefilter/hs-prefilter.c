@@ -94,7 +94,7 @@ int CompileHsDbFromShared()
             continue;
 
         hs_compile_error_t *compile_err = NULL;
-        err = hs_compile_ext_multi((const char *const *)cd->expressions, cd->flags, cd->ids, NULL,
+        err = hs_compile_ext_multi((const char *const *)cd->expressions, cd->flags, NULL, NULL,
                 cd->pattern_cnt, HS_MODE_BLOCK, NULL, &ctx.hs_db_table[type], &compile_err);
 
         if (err != HS_SUCCESS) {
