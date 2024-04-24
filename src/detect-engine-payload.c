@@ -116,11 +116,11 @@ static void PrefilterPktPayload(DetectEngineThreadCtx *det_ctx, Packet *p, const
 #ifdef BUILD_DPDK_APPS
     // packet checked in dpdk prefilter
     if (p->dpdk_v.detect_flags & PREFILTER_DETECT_FLAG_RAN) {
-        SCLogInfo("Prefiltering pkt - meta: %04x, current type %d (%02x)", p->dpdk_v.detect_flags,
-                mpm_ctx->type, mpm_ctx->type);
-        if ((1 << mpm_ctx->type) & p->dpdk_v.detect_flags) {
-            SCLogInfo("Metadata set in prefilter - no match, skipping");
+        if (!((1 << mpm_ctx->type) & p->dpdk_v.detect_flags)) {
+            SCLogInfo("Packet marked as safe in DPDK prefilter");
             SCReturn;
+        } else {
+            SCLogInfo("Packet marked for further inspection in DPDK prefilter");
         }
     }
 #endif

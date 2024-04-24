@@ -787,9 +787,23 @@ static void PrefilterMpmPkt(DetectEngineThreadCtx *det_ctx,
 {
     SCEnter();
 
+    //TODO* add check for detect flags, might be useful here
+
     const PrefilterMpmPktCtx *ctx = (const PrefilterMpmPktCtx *)pectx;
     const MpmCtx *mpm_ctx = ctx->mpm_ctx;
     SCLogDebug("running on list %d", ctx->list_id);
+
+#ifdef BUILD_DPDK_APPS
+    // packet checked in dpdk prefilter
+    if (p->dpdk_v.detect_flags & PREFILTER_DETECT_FLAG_RAN) {
+        if (!((1 << mpm_ctx->type) & p->dpdk_v.detect_flags)) {
+            SCLogInfo("Packet marked as safe in DPDK prefilter");
+            SCReturn;
+        } else {
+            SCLogInfo("Packet marked for further inspection in DPDK prefilter");
+        }
+    }
+#endif
 
     InspectionBuffer *buffer = ctx->GetData(det_ctx, ctx->transforms,
             p, ctx->list_id);
