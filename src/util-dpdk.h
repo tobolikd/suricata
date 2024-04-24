@@ -400,8 +400,6 @@ typedef enum MpmCtxType_ {
 typedef struct HSCompileData_ {
     MpmCtxType type;
     uint32_t pattern_cnt;
-    // uint32_t minlen;
-    // uint32_t maxlen;
     uint32_t mem_size;
     uint32_t *ids;
     uint32_t *flags;

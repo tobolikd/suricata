@@ -106,7 +106,6 @@ static int ReallocCompileData(MpmCtxType type, uint32_t pattern_cnt)
             goto error;
 
         compile_data_table[type]->type = type;
-        // compile_data_table[type]->minlen = UINT32_MAX;
     }
 
     HSCompileData *cd = compile_data_table[type];
@@ -152,10 +151,6 @@ int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
         goto error;
 
     HSCompileData *compile_data = compile_data_table[type];
-    // compile_data->minlen =
-    //        mpm_ctx->minlen < compile_data->minlen ? mpm_ctx->minlen : compile_data->minlen;
-    // compile_data->maxlen =
-    //        mpm_ctx->maxlen > compile_data->maxlen ? mpm_ctx->maxlen : compile_data->maxlen;
 
     for (uint32_t i = 0, p = orig_pattern_cnt; i < INIT_HASH_SIZE; i++) {
         SCHSPattern *node = hs_context->init_hash[i];
@@ -170,7 +165,6 @@ int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
             }
             compile_data->expressions[p] = pattern;
             compile_data->mem_size += strlen(pattern) + 1;
-            // set all ids to be the same
             compile_data->ids[p] = node->id;
 
             compile_data->flags[p] = HS_FLAG_SINGLEMATCH | HS_FLAG_PREFILTER;
@@ -241,8 +235,6 @@ int DpdkIpcBuildHsDb(void)
 
         cd_new->type = cd_orig->type;
         cd_new->pattern_cnt = cd_orig->pattern_cnt;
-        // cd_new->minlen = cd_orig->minlen;
-        // cd_new->maxlen = cd_orig->maxlen;
         cd_new->mem_size = cd_orig->mem_size;
 
         cd_new->ids = curr_pos;
