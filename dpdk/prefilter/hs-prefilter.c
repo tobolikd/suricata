@@ -117,7 +117,7 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
 {
     HSCallbackCtx *ctx = context;
     metadata_to_suri_t *metadata_to_suri = ctx->metadata;
-    metadata_to_suri->detect_flags |= (1 << ctx->type);
+    // metadata_to_suri->detect_flags |= (1 << ctx->type);
 
     Log().debug(0, "Matched rule, id %d, from %llu, to %llu", id, from, to);
     return 0;
