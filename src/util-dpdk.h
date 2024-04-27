@@ -389,8 +389,8 @@ void DevicePreStopPMDSpecificActions(DPDKThreadVars *ptv, const char *driver_nam
 
 typedef enum MpmCtxType_ {
     UNKNOWN = 0,
-    PAYLOAD,
-    PKT,
+    PAYLOAD = 1,
+    PKT = 1,
     MPM_CTX_TYPE_MAX = PKT,
     MPM_CTX_TYPE_SIZE = MPM_CTX_TYPE_MAX + 1,
 } MpmCtxType;
