@@ -127,7 +127,7 @@ error:
     return -1;
 }
 
-int InitCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
+int AddCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
 {
     if (type == UNKNOWN) {
         SCLogInfo("Unknown ctx supplied");

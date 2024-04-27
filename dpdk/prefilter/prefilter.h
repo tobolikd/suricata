@@ -37,7 +37,6 @@
 #include <rte_mempool.h>
 #include <rte_hash.h>
 
-#include "dev-conf.h"
 #include "hash-table-bypass.h"
 
 #ifdef BUILD_HYPERSCAN

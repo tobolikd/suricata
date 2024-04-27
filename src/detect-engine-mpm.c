@@ -1584,7 +1584,7 @@ static void MpmStoreSetup(const DetectEngineCtx *de_ctx, MpmStore *ms)
         MpmFactoryReClaimMpmCtx(de_ctx, ms->mpm_ctx);
         ms->mpm_ctx = NULL;
     } else {
-        InitCompileDataForDPDKPrefilter(ms->mpm_ctx, ms->type);
+        AddCompileDataForDPDKPrefilter(ms->mpm_ctx, ms->type);
         if (ms->sgh_mpm_context == MPM_CTX_FACTORY_UNIQUE_CONTEXT) {
             if (mpm_table[ms->mpm_ctx->mpm_type].Prepare != NULL) {
                 mpm_table[ms->mpm_ctx->mpm_type].Prepare(ms->mpm_ctx);
