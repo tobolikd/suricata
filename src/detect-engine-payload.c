@@ -117,7 +117,6 @@ static void PrefilterPktPayload(DetectEngineThreadCtx *det_ctx, Packet *p, const
     // packet checked in dpdk prefilter
     if (p->dpdk_v.detect_flags & PREFILTER_DETECT_FLAG_RAN) {
         if (!((1 << mpm_ctx->type) & p->dpdk_v.detect_flags)) {
-            SCLogInfo("Packet marked as safe in DPDK prefilter (payload)");
             SCReturn;
         }
     }
