@@ -70,14 +70,6 @@ void *hs_rte_calloc(size_t size)
 int CompileHsDbFromShared()
 {
     hs_error_t err = HS_SUCCESS;
-    /* when enabled memory allocation collides with mp_malloc_sync and sending
-     * ip message to main app fails
-    // err = hs_set_allocator(hs_rte_calloc, rte_free);
-    if (err != HS_SUCCESS) {
-        Log().error(err, "failed to set HS allocator");
-        goto error;
-    }
-    */
 
     const struct rte_memzone *memzone =
             rte_memzone_lookup(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME);
@@ -120,7 +112,6 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
     if (ctx->type == PKT)
         metadata_to_suri->detect_flags |= (1 << ctx->type);
 
-    Log().debug(0, "Matched rule, id %d, from %llu, to %llu", id, from, to);
     return 0;
 }
 
@@ -186,7 +177,6 @@ finish:
     reply.param[0] = err;
     reply.len_param = 1;
     rte_mp_reply(&reply, peer);
-    // rte_mp_sendmsg(&reply);
 
     return err;
 }

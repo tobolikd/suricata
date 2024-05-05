@@ -17,8 +17,6 @@ typedef struct HSCallbackCtx_ {
 
 int ThreadSuricataAllocScratch(struct lcore_values *lv);
 
-/* compile hs db
- */
 int CompileHsDbFromShared();
 
 void HSSearch(ring_buffer *packet_buff, hs_scratch_t *scratch_space, MpmCtxType type);
