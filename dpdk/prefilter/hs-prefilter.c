@@ -70,14 +70,6 @@ void *hs_rte_calloc(size_t size)
 int CompileHsDbFromShared()
 {
     hs_error_t err = HS_SUCCESS;
-    /* when enabled memory allocation collides with mp_malloc_sync and sending
-     * ip message to main app fails
-    // err = hs_set_allocator(hs_rte_calloc, rte_free);
-    if (err != HS_SUCCESS) {
-        Log().error(err, "failed to set HS allocator");
-        goto error;
-    }
-    */
 
     const struct rte_memzone *memzone =
             rte_memzone_lookup(DPDK_PREFILTER_COMPILE_DATA_MEMZONE_NAME);
@@ -89,12 +81,10 @@ int CompileHsDbFromShared()
     HSCompileData **compile_data_arr = memzone->addr;
 
     for (MpmCtxType type = 0; type <= MPM_CTX_TYPE_MAX; type++) {
-        Log().info("Compile data of type %d", type);
         HSCompileData *cd = compile_data_arr[type];
         if (cd == NULL)
             continue;
 
-        Log().info("Compiling data of type %d", type);
         hs_compile_error_t *compile_err = NULL;
         err = hs_compile_ext_multi((const char *const *)cd->expressions, cd->flags, NULL, NULL,
                 cd->pattern_cnt, HS_MODE_BLOCK, NULL, &ctx.hs_db_table[type], &compile_err);
@@ -121,7 +111,6 @@ int MatchEventPrefilter(unsigned int id, unsigned long long from, unsigned long 
     metadata_to_suri_t *metadata_to_suri = ctx->metadata;
     metadata_to_suri->detect_flags |= (1 << ctx->type);
 
-    Log().debug(0, "Matched rule, id %d, from %llu, to %llu", id, from, to);
     return 0;
 }
 
@@ -187,7 +176,6 @@ finish:
     reply.param[0] = err;
     reply.len_param = 1;
     rte_mp_reply(&reply, peer);
-    // rte_mp_sendmsg(&reply);
 
     return err;
 }
