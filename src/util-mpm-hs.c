@@ -130,10 +130,10 @@ error:
 int AddCompileDataForDPDKPrefilter(MpmCtx *mpm_ctx, MpmCtxType type)
 {
     if (type == UNKNOWN) {
-        SCLogInfo("Unknown ctx supplied");
+        SCLogDebug("Unknown ctx supplied");
         return 0;
     }
-    SCLogInfo("Preparing %p with type %d", mpm_ctx, type);
+    SCLogDebug("Preparing %p with type %d", mpm_ctx, type);
     int err = 0;
     mpm_ctx->type = type;
 
