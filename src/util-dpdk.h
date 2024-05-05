@@ -356,7 +356,6 @@ struct PFConfRingEntry {
 struct PFConf {
     uint32_t ring_entries_cnt;
     struct PFConfRingEntry *ring_entries;
-    uint32_t shared_mem_cnt;
 };
 
 enum PFMessageType {

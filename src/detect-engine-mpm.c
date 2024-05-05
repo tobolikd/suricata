@@ -262,11 +262,6 @@ int DetectMpmPrepareAppMpms(DetectEngineCtx *de_ctx)
             MpmCtx *mpm_ctx = MpmFactoryGetMpmCtxForProfile(de_ctx, am->sgh_mpm_context, dir);
             if (mpm_ctx != NULL) {
                 if (mpm_table[de_ctx->mpm_matcher].Prepare != NULL) {
-#ifdef BUILD_DPDK_APPS
-#ifdef BUILD_HYPERSCAN
-                    // InitCompileDataForDPDKPrefilter(mpm_ctx, APP);
-#endif // BUILD_HYPERSCAN
-#endif // BUILD_DPDK_APPS
                     r |= mpm_table[de_ctx->mpm_matcher].Prepare(mpm_ctx);
                 }
             }
@@ -496,11 +491,6 @@ int DetectMpmPrepareFrameMpms(DetectEngineCtx *de_ctx)
             SCLogDebug("%s: %d mpm_Ctx %p", am->name, r, mpm_ctx);
             if (mpm_ctx != NULL) {
                 if (mpm_table[de_ctx->mpm_matcher].Prepare != NULL) {
-#ifdef BUILD_DPDK_APPS
-#ifdef BUILD_HYPERSCAN
-                    // InitCompileDataForDPDKPrefilter(mpm_ctx, FRAME);
-#endif // BUILD_HYPERSCAN
-#endif // BUILD_DPDK_APPS
                     r |= mpm_table[de_ctx->mpm_matcher].Prepare(mpm_ctx);
                     SCLogDebug("%s: %d", am->name, r);
                 }
@@ -662,11 +652,6 @@ int DetectMpmPreparePktMpms(DetectEngineCtx *de_ctx)
             MpmCtx *mpm_ctx = MpmFactoryGetMpmCtxForProfile(de_ctx, am->sgh_mpm_context, 0);
             if (mpm_ctx != NULL) {
                 if (mpm_table[de_ctx->mpm_matcher].Prepare != NULL) {
-#ifdef BUILD_DPDK_APPS
-#ifdef BUILD_HYPERSCAN
-                    // InitCompileDataForDPDKPrefilter(mpm_ctx, PKT);
-#endif // BUILD_HYPERSCAN
-#endif // BUILD_DPDK_APPS
                     r |= mpm_table[de_ctx->mpm_matcher].Prepare(mpm_ctx);
                     SCLogDebug("%s: %d", am->name, r);
                 }
@@ -1547,7 +1532,6 @@ static void MpmStoreSetup(const DetectEngineCtx *de_ctx, MpmStore *ms)
         return;
     }
 
-    SCLogInfo("InitCtx mpmstoresetup");
     MpmInitCtx(ms->mpm_ctx, de_ctx->mpm_matcher);
 
     /* add the patterns */
